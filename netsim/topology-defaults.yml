@@ -4,6 +4,9 @@
 ---
 provider: libvirt
 
+# Default is no multi-tenancy
+lab_id: 0
+
 # Include core defaults and configuration modules
 #
 # Core defaults include:
