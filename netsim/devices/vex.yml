@@ -1,0 +1,21 @@
+description: Juniper vEX container
+interface_name: xe-0/0/{ifindex}
+loopback_interface_name: "lo0.{ifindex}"
+ifindex_offset: 0
+mgmt_if: fxp0
+group_vars:
+  ansible_user: admin
+  ansible_ssh_pass: "admin@123"
+  ansible_network_os: junos
+  ansible_connection: netconf
+  netlab_console_connection: ssh
+  netlab_device_type: vex
+features:
+  initial:
+    ipv4:
+      unnumbered: True
+    ipv6:
+      lla: True
+external:
+  image: none
+graphite.icon: switch
