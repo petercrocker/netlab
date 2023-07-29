@@ -9,6 +9,7 @@ import platform
 import subprocess
 import os
 import typing
+import pathlib
 
 # Related modules
 from box import Box
@@ -16,7 +17,9 @@ from box import Box
 from .. import common
 from ..callback import Callback
 from ..augment import devices,links
-from ..data import get_box,filemaps
+from ..data import get_box,get_empty_box,filemaps
+from ..utils import files as _files
+from ..utils import templates,log,strings
 
 class _Provider(Callback):
   def __init__(self, provider: str, data: Box) -> None:
@@ -37,10 +40,10 @@ class _Provider(Callback):
     return 'templates/provider/' + self.provider
 
   def get_full_template_path(self) -> str:
-    return str(common.get_moddir()) + '/' + self.get_template_path()
+    return str(_files.get_moddir()) + '/' + self.get_template_path()
 
   def find_extra_template(self, node: Box, fname: str) -> typing.Optional[str]:
-    return common.find_file(fname+'.j2',[ f'./{node.device}','.',f'{ self.get_full_template_path() }/{node.device}'])
+    return _files.find_file(fname+'.j2',[ f'./{node.device}','.',f'{ self.get_full_template_path() }/{node.device}'])
 
   def get_output_name(self, fname: typing.Optional[str], topology: Box) -> str:
     if fname:
@@ -107,7 +110,7 @@ class _Provider(Callback):
         continue
 
       out_folder = f"{self.provider}_files/{node.name}"
-      bind_dict[f"{out_folder}/{file}"] = mapping
+      bind_dict[f"{out_folder}/{file}"] = mapping         # note: node_files directory is flat
 
     node[self.provider][outkey] = filemaps.dict_to_mapping(bind_dict)
 
@@ -122,7 +125,7 @@ class _Provider(Callback):
     if not binds:
       return
 
-    sys_folder = str(common.get_moddir())+"/"
+    sys_folder = str(_files.get_moddir())+"/"
     out_folder = f"{self.provider}_files/{node.name}"
 
     bind_dict = filemaps.mapping_to_dict(binds)
@@ -133,24 +136,44 @@ class _Provider(Callback):
       template_name = self.find_extra_template(node,file_name)
       if template_name:
         node_data = node + { 'hostvars': topology.nodes }
-        common.write_template(
-          in_folder=os.path.dirname(template_name),
-          j2=os.path.basename(template_name),
-          data=node_data.to_dict(),
-          out_folder=out_folder, filename=file_name)
+        if '/' in file_name:                      # Create subdirectory in out_folder if needed
+          pathlib.Path(f"{out_folder}/{os.path.dirname(file_name)}").mkdir(parents=True,exist_ok=True)
+        try:
+          templates.write_template(
+            in_folder=os.path.dirname(template_name),
+            j2=os.path.basename(template_name),
+            data=node_data.to_dict(),
+            out_folder=out_folder, filename=file_name)
+        except Exception as ex:
+          log.fatal(
+            text=f"Error rendering {template_name} into {file_name}\n{strings.extra_data_printout(str(ex))}",
+            module=self.provider)
+
         print( f"Created {out_folder}/{file_name} from {template_name.replace(sys_folder,'')}, mapped to {node.name}:{mapping}" )
+      else:
+        common.error(f"Cannot find template for {file_name} on node {node.name}",common.MissingValue,'provider')
 
   def create(self, topology: Box, fname: typing.Optional[str]) -> None:
     self.transform(topology)
     fname = self.get_output_name(fname,topology)
-    output = common.open_output_file(fname)
-    output.write(common.template(self.get_root_template(),topology.to_dict(),self.get_template_path(),self.provider))
+    tname = self.get_root_template()
+    try:
+      r_text = templates.render_template(
+        data=topology.to_dict(),
+        j2_file=tname,
+        path=self.get_template_path(),
+        extra_path=_files.get_search_path(self.provider))
+    except Exception as ex:
+      log.fatal(
+        text=f"Error rendering {fname} from {tname}\n{strings.extra_data_printout(str(ex))}",
+        module=self.provider)
+
+    _files.create_file_from_text(fname,r_text)
     if fname != '-':
-      common.close_output_file(output)
       print("Created provider configuration file: %s" % fname)
       self.post_configuration_create(topology)
     else:
-      output.write("\n")
+      print("\n")
 
   def post_start_lab(self, topology: Box) -> None:
     pass
@@ -180,7 +203,12 @@ class _Provider(Callback):
         if not 'provider' in node:
           continue
 
-        l[topology.provider].provider[node.provider] = True
+        p_name = topology.provider                          # Get primary and secondary provider
+        s_name = node.provider                              # ... to make the rest of the code more readable
+
+        l[p_name].provider[s_name] = True                   # Collect secondary link provider(s)
+        if 'uplink' in l[p_name]:                           # ... and copy primary uplink to secondary uplink
+          l[s_name].uplink = l[p_name].uplink
 
   """
   Generic provider pre-output transform: remove loopback links
@@ -238,7 +266,8 @@ def select_topology(topology: Box, provider: str) -> Box:
   topology = get_box(topology)                      # Create a copy of the topology
   for n in list(topology.nodes.keys()):             # Remove all nodes not belonging to the current provider
     if topology.nodes[n].provider != provider:
-      topology.nodes.pop(n,None)
+      topology.nodes[n].unmanaged = True
+#      topology.nodes.pop(n,None)
 
   topology.links = [ l for l in topology.links if provider in l.provider ]      # Retain only the links used by current provider
   return topology

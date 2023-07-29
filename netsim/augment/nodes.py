@@ -8,6 +8,7 @@ Create detailed node-level data structures from topology
 import typing
 
 from box import Box
+import netaddr
 
 from .. import common
 from .. import data
@@ -15,7 +16,7 @@ from .. import utils
 from .. import addressing
 from .. import providers
 from . import devices
-from ..data.validate import validate_attributes
+from ..data.validate import validate_attributes,get_object_attributes
 from ..data.types import must_be_int,must_be_string,must_be_id
 from ..data import global_vars
 from ..modules._dataplane import extend_id_set,is_id_used,set_id_counter,get_next_id
@@ -72,6 +73,8 @@ def create_node_dict(nodes: Box) -> Box:
 Validate node attributes
 """
 def validate(topology: Box) -> None:
+  # Allow provider- and tool- specific node attributes
+  extra = get_object_attributes(['providers','tools'],topology)
   for n_name,n_data in topology.nodes.items():
     must_be_id(
       parent=None,
@@ -79,8 +82,6 @@ def validate(topology: Box) -> None:
       path=f'NOATTR:node name {n_name}',
       max_length=global_vars.get_const('MAX_NODE_ID_LENGTH',16),
       module='nodes')
-    extra = list(topology.defaults.providers.keys())        # Allow provider-specific node attributes
-    extra.extend(list(topology.get('tools',{}).keys()))     # ... plus tool-specific attributes
     validate_attributes(
       data=n_data,                                    # Validate node data
       topology=topology,
@@ -89,6 +90,7 @@ def validate(topology: Box) -> None:
       attr_list=['node'],                             # We're checking node attributes
       modules=n_data.get('module',[]),                # ... against node modules
       module='nodes',                                 # Function is called from 'nodes' module
+      ignored=['_','netlab_'],                        # Ignore attributes starting with _ or netlab_
       extra_attributes=extra)                         # Allow provider- and tool-specific settings
 
 def augment_mgmt_if(node: Box, defaults: Box, addrs: typing.Optional[Box]) -> None:
@@ -138,7 +140,7 @@ def augment_mgmt_if(node: Box, defaults: Box, addrs: typing.Optional[Box]) -> No
 
   if addrs.mac_eui and not 'mac' in node.mgmt:                        # Finally, assign management MAC address
     addrs.mac_eui[5] = node.id
-    node.mgmt.mac = str(addrs.mac_eui)
+    node.mgmt.mac = addrs.mac_eui.format(netaddr.mac_unix_expanded)
 
   if not 'ipv4' in node.mgmt and not 'ipv6' in node.mgmt:             # Final check: did we get a usable management address?
     common.error(
@@ -347,6 +349,7 @@ def transform(topology: Box, defaults: Box, pools: Box) -> None:
 
     augment_node_device_data(n,defaults)
 
+    n.af = {}                                                 # Nodes must have AF attribute
     if pools.loopback and n.get('role','') != 'host':
       prefix_list = addressing.get(pools,['loopback'],n.id)
       for af in prefix_list:
@@ -358,6 +361,7 @@ def transform(topology: Box, defaults: Box, pools: Box) -> None:
             n.loopback[af] = addressing.get_addr_mask(prefix_list[af],1)
           else:
             n.loopback[af] = str(prefix_list[af])
+          n.af[af] = True
 
     augment_mgmt_if(n,defaults,topology.addressing.mgmt)
     providers.execute_node("augment_node_data",n,topology)

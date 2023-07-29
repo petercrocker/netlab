@@ -12,7 +12,7 @@ from box import Box
 
 from .. import common
 from .. import data
-from ..data.validate import validate_attributes
+from ..data.validate import validate_attributes,get_object_attributes
 from ..data.types import must_be_list,must_be_string,must_be_dict
 
 #
@@ -85,7 +85,9 @@ def check_required_elements(topology: Box) -> None:
     topology.defaults.name = topology.name
 
 def check_global_elements(topology: Box) -> None:
-  providers = list(topology.defaults.providers.keys())
+  # Allow provider-specific global attributes
+  providers = get_object_attributes(['providers'],topology)
+
   validate_attributes(
     data=topology,                                  # Validate node data
     topology=topology,
@@ -176,6 +178,9 @@ def cleanup_topology(topology: Box) -> Box:
 
   # Remove PFX generators from addressing section
   #
+  if not 'addressing' in topo_copy:
+    return topo_copy
+
   for k,v in topo_copy.addressing.items():
     for p in list(v.keys()):
       if "_pfx" in p or "_eui" in p:

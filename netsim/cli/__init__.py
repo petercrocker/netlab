@@ -34,7 +34,8 @@ def common_parse_args(debugging: bool = False) -> argparse.ArgumentParser:
     parser.add_argument('--debug', dest='debug', action='store',nargs='*',
                     choices=[
                       'all','addr','cli','links','libvirt','modules','plugin','template',
-                      'vlan','vrf','quirks','validate','addressing','groups','quirks','status'
+                      'vlan','vrf','quirks','validate','addressing','groups','quirks','status',
+                      'external'
                     ],
                     help=argparse.SUPPRESS)
 
@@ -146,7 +147,6 @@ def get_message(topology: Box, action: str, default_message: bool = False) -> ty
 
   if not isinstance(topology.message,Box):                  # Otherwise we should be dealing with a dict
     common.fatal('topology message should be a string or a dict')
-    return None
 
   return topology.message.get(action,None)                  # Return action-specific message if it exists
 
@@ -233,22 +233,26 @@ def lab_commands() -> None:
   mod = None
   cmd = sys.argv[1]
 
+  if cmd in ['-h','--help']:
+    cmd = 'usage'
+
+  if cmd == 'debug':
+    arg_start = 3
+    cmd = sys.argv[2]
+    mod = importlib.import_module("."+sys.argv[2],__name__)
+  elif quick_commands.get(cmd,None):
+    quick_commands[cmd](sys.argv[arg_start:])
+    return
+
   mod_path = os.path.dirname(__file__) + f"/{cmd}.py"
   if not os.path.isfile(mod_path):
     print("Unknown netlab command '%s'\nUse 'netlab usage' to get the list of valid commands" % cmd)
     sys.exit(1)
 
-  if cmd == 'debug':
-    arg_start = 3
-    mod = importlib.import_module("."+sys.argv[2],__name__)
-  elif quick_commands.get(cmd,None):
-    quick_commands[cmd](sys.argv[arg_start:])
-    return
-  else:
-    try:
-      mod = importlib.import_module("."+cmd,__name__)
-    except Exception as ex:
-      common.fatal(f"Error importing {__name__}.{cmd}: {ex}")
+  try:
+    mod = importlib.import_module("."+cmd,__name__)
+  except Exception as ex:
+    common.fatal(f"Error importing {__name__}.{cmd}: {ex}")
 
   if mod:
     if hasattr(mod,'run'):

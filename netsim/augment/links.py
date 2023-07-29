@@ -11,7 +11,7 @@ from box import Box
 from .. import common
 from .. import data
 from .. import utils
-from ..data.validate import validate_attributes
+from ..data.validate import validate_attributes,get_object_attributes
 from ..data.types import must_be_string,must_be_list,must_be_dict,must_be_id
 from .. import addressing
 from . import devices
@@ -97,6 +97,7 @@ def adjust_link_object(l: typing.Any, linkname: str, nodes: Box) -> typing.Optio
   if isinstance(l,str):                                       # String, split into a list of nodes
     link_intf = []
     for n in l.split('-'):                # ... split it into a list of nodes
+      n = n.strip()                       # ... strip leading and trailing spaces (fixing #816)
       valid_node = n in nodes
       if not valid_node:
         valid_node = len([ x for x in nodes if n.startswith(x) ]) > 0
@@ -142,7 +143,9 @@ def adjust_link_list(links: list, nodes: Box) -> list:
 Validate link attributes
 """
 def validate(topology: Box) -> None:
-  providers = list(topology.defaults.providers.keys())
+  # Allow provider-specific global attributes
+  providers = get_object_attributes(['providers'],topology)
+
   for l_data in topology.links:
     validate_attributes(
       data=l_data,                                    # Validate link data
@@ -164,6 +167,7 @@ def validate(topology: Box) -> None:
         data_name=f'interface',
         attr_list=['interface','link'],                 # We're checking interface or link attributes
         modules=n_data.get('module',[]),                # ... against node modules
+        extra_attributes=providers,                     # Allow provider-specific attributes in interfaces
         module_source=f'nodes.{intf.node}',
         module='links')                                 # Function is called from 'links' module
 
@@ -891,7 +895,7 @@ Link index utility functions:
 '''
 
 def get_next_linkindex(topology: Box) -> int:
-  if not 'links' in topology:
+  if not topology.links:
     topology.links = []
     return topology.defaults.get('link_index',1)
 

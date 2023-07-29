@@ -20,6 +20,7 @@ except ImportError:
 from . import common
 from . import data
 from .data import types
+from .utils import files as _files
 
 """
 Utility routines for include_yaml functionality
@@ -31,7 +32,7 @@ def get_traversable_path(dir_name : str) -> typing.Any:
     pkg_files: typing.Any = None
 
     if not new_resources:
-      pkg_files = pathlib.Path(common.get_moddir())
+      pkg_files = pathlib.Path(_files.get_moddir())
     else:
       package = '.'.join(__name__.split('.')[:-1])
       pkg_files = resources.files(package)        # type: ignore
@@ -178,6 +179,20 @@ def load(fname: str , local_defaults: str, sys_defaults: str) -> Box:
 
   return topology
 
+#
+# Parse values specified in CLI settings. Return string, bool or int
+#
+def transform_cli_value(v: str) -> typing.Union[int,bool,str]:
+  try:                                            # Try to parse an integer
+    return int(v)
+  except:
+    pass
+
+  if v.lower() in ['true','false']:               # Recognize True or False
+    return v.lower() == 'true'                    # ... and return the result of "do we have true?"
+  
+  return v                                        # Otherwise it's a string
+
 def add_cli_args(topo: Box, args: typing.Union[argparse.Namespace,Box]) -> None:
   if args.device:
     topo.defaults.device = args.device
@@ -197,6 +212,7 @@ def add_cli_args(topo: Box, args: typing.Union[argparse.Namespace,Box]) -> None:
       if not "=" in s:
         common.error("Invalid CLI setting %s, should be in format key=value" % s)
       (k,v) = s.split("=")
+      v = transform_cli_value(v)
       try:
         topo[k] = v
       except TypeError as ex:

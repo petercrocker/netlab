@@ -14,9 +14,13 @@
    :backlinks: none
 ```
 
-## Minimal supported version: 0.37.1 (2023-2-27)
-Version 0.37 introduced some changes to the location of generated certificate files.
-Use ```sudo containerlab version upgrade``` to upgrade to the latest version
+## Supported Versions
+
+We tested _netlab_ with _containerlab_ version 0.41.2. That's also the version installed by the **netlab install containerlab** command.
+
+Minimum supported _containerlab_ version is 0.37.1 (2023-2-27) -- that version introduced some changes to the location of generated certificate files.
+
+If needed, use ```sudo containerlab version upgrade``` to upgrade to the latest _containerlab_ version.
 
 ## Container Images
 
@@ -27,15 +31,25 @@ Lab topology file created by **[netlab up](../netlab/up.md)** or **[netlab creat
 | Arista cEOS            | ceos:4.26.4M                 |
 | Cumulus VX             | networkop/cx:4.4.0           |
 | Cumulus VX with NVUE   | networkop/cx:5.0.1           |
-| FRR                    | frrouting/frr:v8.3.1         |
+| Dell OS10              | vrnetlab/vr-ftosv            |
+| FRR                    | frrouting/frr:v8.4.0         |
+| Juniper vMX            | vrnetlab/vr-vmx:18.2R1.9     |
+| Juniper vSRX           | vrnetlab/vr-vsrx:23.1R1.8    |
+| Linux[❗](clab-linux)  | python:3.9-alpine            |
+| Mikrotik RouterOS 7    | vrnetlab/vr-routeros:7.6     |
 | Nokia SR Linux         | ghcr.io/nokia/srlinux:latest |
 | Nokia SR OS            | vrnetlab/vr-sros:latest      |
+| VyOS                   | ghcr.io/sysoleg/vyos-container |
 
-* Cumulus VX, FRR, and Nokia SR Linux images are automatically downloaded from Docker Hub.
+* Cumulus VX, FRR, Linux, and Nokia SR Linux images are automatically downloaded from Docker Hub.
 * Arista cEOS image has to be [downloaded and installed manually](ceos.md).
 * Nokia SR OS container image (requires a license), see also [vrnetlab instructions](https://containerlab.srlinux.dev/manual/vrnetlab/).
 
 You can also use [vrnetlab](https://github.com/vrnetlab/vrnetlab) to build VM-in-container images for Cisco CSR 1000v, Nexus 9300v and IOS XR, OpenWRT, Mikrotik RouterOS, Arista vEOS, Juniper vMX and vQFX, and a few other devices.
+
+```{warning}
+You might have to change the default loopback address pool when using _vrnetlab_ images. See [](clab-vrnetlab) for details.
+```
 
 ## LAN Bridges
 
@@ -52,6 +66,30 @@ defaults.providers.clab.bridge_type: ovs-bridge
 module: [ ospf ]
 nodes: [ s1, s2, s3 ]
 links: [ s1-s2, s2-s3 ]
+```
+
+(clab-network-external)=
+## Connecting to the Outside World
+
+Lab links are modeled as point-to-point *veth* links or as links to internal Linux bridges. If you want to have a lab link connected to the outside world, set **clab.uplink** to the name of the Ethernet interface on your server[^IFNAME]. The minimum *containerlab* release supporting this feature is release 0.43.0.
+
+Example: use the following topology to connect your lab to the outside world through `r1` on a Linux server that uses `enp86s0` as the name of the Ethernet interface:
+
+```
+defaults.device: cumulus
+provider: clab
+nodes: [ r1,r2 ]
+links:
+- r1-r2
+- r1:
+  clab:
+    uplink: enp86s0
+```
+
+[^IFNAME]: Use **ip addr** or **ifconfig** find the interface name.
+
+```{note}
+In multi-provider topologies set the **uplink** parameter only for the primary provider (the one specified in topology-level **provider** attribute); netlab copies the **uplink** parameter  to all secondary providers during the lab topology transformation process.
 ```
 
 ## Container Runtime Support
@@ -158,16 +196,20 @@ defaults.providers.clab.node_config_attributes: [ ports, env, user ]
 * **\_network**: The Docker network name (default: `netlab_mgmt`)
 * **\_bridge**: The name of the underlying Linux bridge (default: unspecified, created by Docker)
 
-(clab-linux)=
-## Deploying Linux Containers
+(clab-vrnetlab)=
+## Using vrnetlab Containers
 
-The initial configuration process (**[netlab initial](../netlab/initial.md)**) does not rely on commands executed within Linux containers:
+_vrnetlab_ is an open-source project that packages network device virtual machines into containers. The architecture of the packaged container requires an internal network, and it seems that _vrnetlab_ (or the fork used by _containerlab_) uses IPv4 prefix 10.0.0.0/24 on that network which clashes with the _netlab_ loopback address pool.
 
-* The `/etc/hosts` file is generated during the **[netlab create](../netlab/create.md)** process from the ```templates/provider/clab/frr/hosts.j2``` template (see [](clab-config-template)).
-* Interface IP addresses and static routes to in-lab default gateway are configured with **ip** commands executed on the Linux host but within the container network namespace.
-* Static default route points to the management interface.
+If you're experiencing connectivity problems or initial configuration failures with _vrnetlab_-based containers, add the following parameters to the lab configuration file to change the _netlab_ loopback addressing pool:
 
-You can therefore use any container image as a Linux node.
+```
+addressing:
+  loopback:
+    ipv4: 10.255.0.0/24
+  router_id:
+    ipv4: 10.255.0.0/24
+```
 
 ```{eval-rst}
 .. toctree::
@@ -176,5 +218,6 @@ You can therefore use any container image as a Linux node.
    :hidden:
 
    ceos.md
+   linux.md
 ..
 ```

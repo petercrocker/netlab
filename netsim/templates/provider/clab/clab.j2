@@ -3,24 +3,24 @@ name: {{ name }}
 {# We have to deal with mgmt._network not being defined or being False-ish #}
 mgmt:
   network: {{ addressing.mgmt._network|default('') or 'netlab_mgmt' }}
-  ipv4_subnet: {{ addressing.mgmt.ipv4|default('172.20.20.0/24') }}
+  ipv4-subnet: {{ addressing.mgmt.ipv4|default('172.20.20.0/24') }}
   # Note: 'start' not validated
 {% if defaults.addressing.mgmt.ipv6 is defined %}
-  ipv6_subnet: {{ defaults.addressing.mgmt.ipv6 }}
+  ipv6-subnet: {{ defaults.addressing.mgmt.ipv6 }}
 {% endif %}
 {% if addressing.mgmt._bridge|default('') %}
   bridge: {{ addressing.mgmt._bridge }}
 {% endif %}
 topology:
   nodes:
-{% for name,n in nodes.items() %}
+{% for name,n in nodes.items() if not (n.unmanaged|default(False)) %}
 {%   set clab = n.clab|default({}) %}
     {{ name }}:
 {%   if n.mgmt.ipv4 is defined %}
-      mgmt_ipv4: {{ n.mgmt.ipv4 }}
+      mgmt-ipv4: {{ n.mgmt.ipv4 }}
 {%   endif %}
 {%   if n.mgmt.ipv6 is defined %}
-      mgmt_ipv6: {{ n.mgmt.ipv6 }}
+      mgmt-ipv6: {{ n.mgmt.ipv6 }}
 {%   endif %}
       kind: {{ clab.kind | default(n.device) }}
 {%    for cset in defaults.providers.clab.node_config_attributes if clab[cset] is defined %}
@@ -58,23 +58,41 @@ topology:
 {% if links|default([]) %}
 {# Define bridges for links with less (stub) or more than 2 nodes #}
 {% set bridge_type = defaults.providers.clab.bridge_type|default('bridge') %}
-{% for b in links|rejectattr('node_count','eq',2)|map(attribute='bridge')|unique %}
+{% for b in links|rejectattr('node_count','eq',2)|selectattr('bridge','defined')|map(attribute='bridge')|unique %}
     {{ b }}:
       kind: {{ bridge_type }}
 {% endfor %}
 
   links:
 {% for l in links %}
-{% if (l.bridge is not defined) or l.node_count==2 %}
+{% if l.clab is defined and l.clab.uplink|default(False) %}
+{#
+    Uplink ==> create MACVTAP endpoint
+#}
+{%   for n in nodes.values() if not (n.unmanaged|default(False)) %}
+{%     for nl in n.interfaces|default([]) if nl.linkindex|default(0) == l.linkindex %}
+{%       set clab = nl.clab|default({}) %}
   - endpoints:
-{%   for n in nodes.values() %}
+    - "{{ n.name }}:{{ clab.name|default(nl.ifname) }}"
+    - "macvlan:{{ l.clab.uplink }}"
+{%     endfor %}
+{%   endfor %}
+{% elif (l.bridge is not defined) or l.node_count==2 %}
+{#
+    point-to-point link between two containers
+#}
+  - endpoints:
+{%   for n in nodes.values() if not (n.unmanaged|default(False)) %}
 {%     for nl in n.interfaces|default([]) if nl.linkindex|default(0) == l.linkindex %}
 {%       set clab = nl.clab|default({}) %}
     - "{{ n.name }}:{{ clab.name|default(nl.ifname) }}"
 {%     endfor %}
 {%   endfor %}
 {% else %}
-{%   for n in nodes.values() %}
+{#
+    link with more or less than two endpoints, or a multi-provider link
+#}
+{%   for n in nodes.values() if not (n.unmanaged|default(False)) %}
 {%     for nl in n.interfaces|default([]) if nl.linkindex|default(0) == l.linkindex %}
 {%       set clab = nl.clab|default({}) %}
   - endpoints:
