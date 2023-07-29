@@ -1,0 +1,15 @@
+#
+# libvirt lab simulating Juniper vEX switches
+#
+---
+defaults:
+  device: vex
+
+module: [ ospf ]
+
+nodes:
+  r1:
+  r2:
+
+links:
+  - r1-r2
