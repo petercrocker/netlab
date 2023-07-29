@@ -1,11 +1,11 @@
 description: Juniper vEX container
-interface_name: xe-0/0/{ifindex}
+interface_name: ge-0/0/{ifindex}
 loopback_interface_name: "lo0.{ifindex}"
 ifindex_offset: 0
 mgmt_if: fxp0
 group_vars:
-  ansible_user: admin
-  ansible_ssh_pass: "admin@123"
+  ansible_user: vagrant
+  ansible_ssh_pass: "Vagrant"
   ansible_network_os: junos
   ansible_connection: netconf
   netlab_console_connection: ssh
@@ -18,10 +18,6 @@ features:
       lla: True
 libvirt:
   image: juniper/vex
-  create_iso: vex
-  create:
-    virt-install --connect=qemu:///system --name=vm_box --os-variant=freebsd10.0 --arch=x86_64 --cpu host --vcpus=4 --hvm
-      --ram=8192 --disk path=vm.qcow2,bus=ide,format=qcow2 --boot hd --network=network:vagrant-libvirt,model=virtio --graphics none --import
 external:
   image: none
 graphite.icon: switch
