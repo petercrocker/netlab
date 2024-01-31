@@ -12,8 +12,8 @@ from box import Box
 import typing
 import netaddr
 
-from .. import common
-from .. import addressing
+from ..utils import log
+from ..augment import addressing
 from .. import data
 
 # Build routing protocol address families
@@ -30,31 +30,31 @@ def routing_af(node: Box, proto: str) -> None:
       node[proto].pop('af',None)
     else:
       if not isinstance(node[proto].af,dict):
-        common.error(
+        log.error(
           f'af attribute for {proto} on node {node.name} has to be a list or a dictionary',
-          common.IncorrectValue,
+          log.IncorrectValue,
           proto)
         return
 
       for proto_af in node[proto].af.keys():
         if not proto_af in ('ipv4','ipv6'):
-          common.error(
+          log.error(
             f'Routing protocol address family has to be ipv4 and/or ipv6: {proto} on {node.name}',
-            common.IncorrectValue,
+            log.IncorrectValue,
             proto)
 
-  if not 'af' in node[proto]:           # No configured AF attribute, calculate it
+  if not 'af' in node[proto]:                         # No configured AF attribute, calculate it
     for af in ['ipv4','ipv6']:
-      if af in node.loopback:           # Address family enabled on loopback?
-        node[proto].af[af] = True       # ... we need it in the routing protocol
+      if af in node.get('loopback',{}):               # Address family enabled on loopback?
+        node[proto].af[af] = True                     # ... we need it in the routing protocol
         continue
 
-      for l in node.get('interfaces',[]):              # Scan all interfaces
-        if af in l and proto in l and not 'vrf' in l:  # Do we have AF enabled on any global interface?
-          node[proto].af[af] = True                    # Found it - we need it the module
+      for l in node.get('interfaces',[]):             # Scan all interfaces
+        if af in l and proto in l and not 'vrf' in l: # Do we have AF enabled on any global interface?
+          node[proto].af[af] = True                   # Found it - we need it the module
           continue
 
-  for af in ['ipv4','ipv6']:              # Remove unused address families
+  for af in ['ipv4','ipv6']:                          # Remove unused address families
     if not node[proto].af.get(af,False):
       node[proto].af.pop(af,False)
 
@@ -92,14 +92,53 @@ def external(intf: Box, proto: str) -> bool:
 
   return False
 
-# IGP passive interfaces: stub link type or stub/passive role
+# Figure out whether an interface is truly a stub interface
 #
-def passive(intf: Box, proto: str) -> bool:
-  if not 'passive' in intf[proto]:
-    intf[proto].passive = intf.type == "stub" or intf.get('role',"") in ["stub","passive"]
-  else:
-    intf[proto].passive = bool(intf[proto].passive)
-  return intf[proto].passive
+# This routing is called to figure out what exactly a link with a 'stub'
+# role is. When used by IGP modules, it checks whether there's an adjacent
+# node running the same IGP (in which case the interface should not be passive).
+# When used by BGP, it just checks whether a neighbor is a daemon
+
+def is_true_stub(intf: Box, topology: Box, proto: str = '') -> bool:
+  for n in intf.get('neighbors',[]):                        # Iterate over the neighbors
+    ndata = topology.nodes[n.node]                          # Find the neighbor details
+    if proto:                                               # IGP check
+      if proto in ndata.get('module',[]):                   # Is the neighbor running the same IGP?
+        return False                                        # ... then the interface is not a true stub
+    else:
+      if ndata.get('_daemon',False) or ndata.get('role','') != 'host':
+        return False                                        # BGP check -- is the neighbor a daemon or a router?
+
+  return True                                               # Found no exceptions, must be a true stub
+
+# Figure out whether an IGP interface should be passive
+#
+# * The proto.passive flag is set
+# * The link role is 'passive' (set manually) or the link is a stub link (single node attached to it)
+# * The link is a stub link (so it has at most one non-host attached)
+#   and other devices on the link are not running the same protocol (so no daemons)
+#
+def passive(intf: Box, proto: str, topology: Box) -> None:
+  if 'passive' in intf[proto]:                              # Explicit 'passive' flag
+    intf[proto].passive = bool(intf[proto].passive)         # ... turn it into bool (just in case)
+    return
+
+  role = intf.get('role',"")
+  if role in ["passive","external"] or intf.type == 'stub': # Passive/external role or stub link ==> must be passive
+    intf[proto].passive = True
+    return
+
+  if role != "stub":                                        # Not a stub role ==> not passive
+    intf[proto].passive = False
+    return
+
+  # And now for the gray area. The only signal we have is link role set to stub, which implies
+  # there's at most one router attached to the link. However, there might be host daemons
+  # attached to it, so we have to do further checks
+  #
+  # Note that we cannot fix this by setting link role to something else, as the 'stub' role
+  # triggers the generation of default gateway which is used for default routing on daemons
+  intf[proto].passive = is_true_stub(intf,topology,proto)
 
 # Create router ID if needed
 #
@@ -108,9 +147,9 @@ def router_id(node: Box, proto: str, pools: Box) -> None:
     try:
       node[proto].router_id = str(netaddr.IPAddress(node[proto].router_id).ipv4())
     except Exception as ex:
-      common.error(
+      log.error(
         f'{proto} router_id "{node[proto].router_id}" specified on node {node.name} is not an IPv4 address',
-        common.IncorrectValue,
+        log.IncorrectValue,
         proto)
     return
 
@@ -119,9 +158,9 @@ def router_id(node: Box, proto: str, pools: Box) -> None:
       node.router_id = str(netaddr.IPAddress(node.router_id).ipv4())
       node[proto].router_id = node.router_id
     except Exception as ex:
-      common.error(
+      log.error(
         f'router_id "{node.router_id}" specified on node {node.name} is not an IPv4 address',
-        common.IncorrectValue,
+        log.IncorrectValue,
         proto)
     return
 
@@ -130,24 +169,24 @@ def router_id(node: Box, proto: str, pools: Box) -> None:
     return
 
   if not pools.router_id:
-    common.error(
+    log.error(
       f'Cannot create a router ID for protocol {proto} on node {node.name}: router_id addressing pool is not defined',
-      common.MissingValue,
+      log.MissingValue,
       proto)
     return
 
   pfx = addressing.get(pools,['router_id'],node.id)
   if not pfx:
-    common.error(
+    log.error(
       f'Cannot create a router ID prefix from router_id pool for protocol {proto} on node {node.name}',
-      common.IncorrectValue,
+      log.IncorrectValue,
       proto)
     return
 
   if not pfx.get('ipv4',None):
-    common.error(
+    log.error(
       f'router_id pool did not return a usable IPv4 address to use as router ID for protocol {proto} on node {node.name}',
-      common.IncorrectValue,
+      log.IncorrectValue,
       proto)
     return
 

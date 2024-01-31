@@ -14,8 +14,7 @@ import pathlib
 # Related modules
 from box import Box
 
-from .. import common
-from ..callback import Callback
+from ..utils.callback import Callback
 from ..augment import devices,links
 from ..data import get_box,get_empty_box,filemaps
 from ..utils import files as _files
@@ -43,7 +42,18 @@ class _Provider(Callback):
     return str(_files.get_moddir()) + '/' + self.get_template_path()
 
   def find_extra_template(self, node: Box, fname: str) -> typing.Optional[str]:
-    return _files.find_file(fname+'.j2',[ f'./{node.device}','.',f'{ self.get_full_template_path() }/{node.device}'])
+    path_suffix = [ node.device ]
+    path_prefix = [ '.', self.get_full_template_path() ]
+
+    if node.get('_daemon',False):
+      if '_daemon_parent' in node:
+        path_suffix.append(node._daemon_parent)
+      path_prefix.append(str(_files.get_moddir() / 'daemons'))
+
+    path = [ pf + "/" + sf for pf in path_prefix for sf in path_suffix ]
+    if log.debug_active('clab'):
+      print(f'Searching for {fname}.j2 in {path}')
+    return _files.find_file(fname+'.j2',path)
 
   def get_output_name(self, fname: typing.Optional[str], topology: Box) -> str:
     if fname:
@@ -103,10 +113,10 @@ class _Provider(Callback):
       if file in bind_dict:
         continue
       if not self.find_extra_template(node,file):
-        common.error(
+        log.error(
           f"Cannot find template {file}.j2 for extra file {self.provider}.{inkey}.{file} on node {node.name}",
-          common.IncorrectValue,
-          self.provider)
+          category=log.IncorrectValue,
+          module=self.provider)
         continue
 
       out_folder = f"{self.provider}_files/{node.name}"
@@ -149,9 +159,10 @@ class _Provider(Callback):
             text=f"Error rendering {template_name} into {file_name}\n{strings.extra_data_printout(str(ex))}",
             module=self.provider)
 
-        print( f"Created {out_folder}/{file_name} from {template_name.replace(sys_folder,'')}, mapped to {node.name}:{mapping}" )
+        strings.print_colored_text('[MAPPED]  ','bright_cyan','Mapped ')
+        print(f"{out_folder}/{file_name} to {node.name}:{mapping} (from {template_name.replace(sys_folder,'')})")
       else:
-        common.error(f"Cannot find template for {file_name} on node {node.name}",common.MissingValue,'provider')
+        log.error(f"Cannot find template for {file_name} on node {node.name}",log.MissingValue,'provider')
 
   def create(self, topology: Box, fname: typing.Optional[str]) -> None:
     self.transform(topology)
@@ -170,7 +181,8 @@ class _Provider(Callback):
 
     _files.create_file_from_text(fname,r_text)
     if fname != '-':
-      print("Created provider configuration file: %s" % fname)
+      log.status_created()
+      print(f"provider configuration file: {fname}")
       self.post_configuration_create(topology)
     else:
       print("\n")
@@ -271,3 +283,22 @@ def select_topology(topology: Box, provider: str) -> Box:
 
   topology.links = [ l for l in topology.links if provider in l.provider ]      # Retain only the links used by current provider
   return topology
+
+"""
+get_forwarded_ports -- build a list of forwarded ports for the specified node
+"""
+def get_forwarded_ports(node: Box, topology: Box) -> list:
+  p = devices.get_provider(node,topology.defaults)
+  fmap = topology.defaults.providers[p].get('forwarded',{})     # Provider-specific forwarded ports
+  if not fmap:                                                  # No forwarded ports?
+    return []                                                   # ... return an empty list
+
+  pmap = topology.defaults.ports                                # Mappings of port names into TCP numbers
+  node_fp = []                                                  # Forwarded ports for the current node
+
+  for fp,fstart in fmap.items():                                # Iterate over forwarded ports
+    if not fp in pmap:                                          # Is the port we're trying to forward known to netlab?
+      continue                                                  # ... nope, bad luck, move on
+    node_fp.append([ fstart + node.id, pmap[fp]])               # Append [host,device] port mapping
+
+  return node_fp

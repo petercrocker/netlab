@@ -8,6 +8,7 @@
 import typing
 import argparse
 import os
+import sys
 
 from box import Box
 from pathlib import Path
@@ -15,10 +16,9 @@ from pathlib import Path
 from . import create
 from . import external_commands, set_dry_run, is_dry_run
 from . import common_parse_args, get_message
-from . import lab_status_update, lab_status_change, get_lab_id
+from . import lab_status_update, lab_status_change
 from .. import providers
-from .. import read_topology
-from ..utils import status,log
+from ..utils import log,strings,status as _status, read as _read
 
 #
 # Extra arguments for 'netlab up' command
@@ -68,12 +68,13 @@ def get_topology(args: argparse.Namespace, cli_args: typing.List[str]) -> Box:
     args = up_args_parser.parse_args(cli_args)                # ... and reparse
     log.set_logging_flags(args)                               # ... use these arguments to set logging flags and read the snapshot
 
-    topology = read_topology.read_yaml(filename=args.snapshot)
+    topology = _read.read_yaml(filename=args.snapshot)
     if topology is None:
       log.fatal(f'Cannot read snapshot file {args.snapshot}, aborting...')
 
     print(f"Using transformed lab topology from snapshot file {args.snapshot}")
   else:                                                       # No snapshot file, use 'netlab create' parser
+    log.section_header('Creating','configuration files')
     topology = create.run(cli_args,'up','Create configuration files, start a virtual lab, and configure it',up_args_parser)
 
   return topology
@@ -88,7 +89,7 @@ Lab status routines:
 """
 
 def lab_status_start(status: Box, topology: Box) -> None:
-  lab_id = get_lab_id(topology)                             # Get the lab ID (or default)
+  lab_id = _status.get_lab_id(topology)                     # Get the lab ID (or default)
   if lab_id in status:
     if status[lab_id].dir != os.getcwd():
       lab_status_update(topology,status,
@@ -103,12 +104,12 @@ def lab_status_start(status: Box, topology: Box) -> None:
       'providers': [] })
 
 def status_start_lab(topology: Box) -> None:
-  status.change_status(
+  _status.change_status(
     topology,
     callback = lambda s,t: lab_status_start(s,t))
 
 def status_start_provider(topology: Box, provider: str) -> None:
-  status.change_status(
+  _status.change_status(
     topology,
     callback = lambda s,t: 
       lab_status_update(t,s,
@@ -119,7 +120,7 @@ def status_start_provider(topology: Box, provider: str) -> None:
 check_existing_lab -- print an command-specific error message if there'a s lab already running in this directory
 """
 def check_existing_lab() -> None:
-  if not status.is_directory_locked():
+  if not _status.is_directory_locked():
     return
   
   print(f'''
@@ -139,8 +140,8 @@ netlab.lock file manually and retry.
 check_lab_instance -- print an error message if the lab instance is already running in a different directory
 """
 def check_lab_instance(topology: Box) -> None:
-  lab_id = get_lab_id(topology)                   # Get the current lab instance ID from lab topology
-  lab_states = status.read_status(topology)       # Read the state of existing lab instances
+  lab_id = _status.get_lab_id(topology)           # Get the current lab instance ID from lab topology
+  lab_states = _status.read_status(topology)      # Read the state of existing lab instances
 
   if not lab_id in lab_states:                    # If this lab instance is not running ==> OK
     return
@@ -163,12 +164,13 @@ delete it.
 """
 Execute provider probes
 """
-def provider_probes(topology: Box, step: int = 2) -> None:
+def provider_probes(topology: Box) -> None:
   p_provider = topology.provider
 
-  external_commands.run_probes(topology.defaults,p_provider,step)
+  log.section_header('Checking','virtualization provider installation')
+  external_commands.run_probes(topology.defaults,p_provider)
   for s_provider in topology[p_provider].providers:
-    external_commands.run_probes(topology.defaults,s_provider,step)
+    external_commands.run_probes(topology.defaults,s_provider)
 
 """
 Start lab topology for a single provider
@@ -216,30 +218,36 @@ def recreate_secondary_config(topology: Box, p_provider: str, s_provider: str) -
 """
 Deploy initial configuration
 """
-def deploy_initial_config(args: argparse.Namespace, topology: Box, step: int) -> None:
+def deploy_initial_config(args: argparse.Namespace, topology: Box) -> None:
   if args.no_config:
-    print("\nInitial configuration skipped, run 'netlab initial' to configure the devices")
+    print()
+    strings.print_colored_text('[SKIPPED] ','yellow',None)
+    print("Initial configuration skipped, run 'netlab initial' to configure the devices")
     return
 
   lab_status_change(topology,f'deploying initial configuration')
-  external_commands.deploy_configs(step,"netlab up",args.fast_config)
-  message = get_message(topology,'up',False)
+  log.section_header('Deploying','initial device configurations')
+  external_commands.deploy_configs("netlab up",args.fast_config)
+  lab_status_change(topology,f'initial configuration complete')
+
+  message = get_message(topology,'initial',True)
   if message:
     print(f"\n\n{message}")
-  lab_status_change(topology,f'initial configuration complete')
 
 """
 Deploy external tools
 """
-def start_external_tools(args: argparse.Namespace, topology: Box, step: int) -> None:
+def start_external_tools(args: argparse.Namespace, topology: Box) -> None:
   if not 'tools' in topology:
     return
   if args.no_tools:
-    print("\nExternal tools not started, start them manually")
+    print()
+    strings.print_colored_text('[SKIPPED] ','yellow',None)
+    print("External tools not started, start them manually")
     return
 
-  external_commands.print_step(step,f"Starting external tools")
   lab_status_change(topology,f'starting external tools')
+  log.section_header('Starting','external tools')
   for tool in topology.tools.keys():
     cmds = external_commands.get_tool_command(tool,'up',topology)
     if cmds is None:
@@ -253,6 +261,8 @@ def start_external_tools(args: argparse.Namespace, topology: Box, step: int) -> 
       print(("DRY_RUN: " if is_dry_run() else "") + msg + "\n")
 
   lab_status_change(topology,f'external tools started')
+  log.status_success()
+  print("External tools started")
 
 """
 Main "lab start" process
@@ -284,18 +294,18 @@ def run(cli_args: typing.List[str]) -> None:
     log.fatal(f'race condition, lab instance already running in {topology.defaults.err_conflict}')
 
   if not is_dry_run():
-    status.lock_directory()
+    _status.lock_directory()
 
-  step = 3
-  external_commands.print_step(step,f"Starting the lab: {p_provider}")
+  log.section_header('Starting',f'{p_provider} nodes')
   start_provider_lab(topology,p_provider)
 
   for s_provider in topology[p_provider].providers:
-    step += 1
-    external_commands.print_step(step,f"Starting the lab: {s_provider}",spacing=True)
+    log.section_header('Starting',f'{s_provider} nodes')
     recreate_secondary_config(topology,p_provider,s_provider)
     start_provider_lab(topology,p_provider,s_provider)
 
-  deploy_initial_config(args,topology,step+1)
-  start_external_tools(args,topology,step+2)
+  deploy_initial_config(args,topology)
+  start_external_tools(args,topology)
   lab_status_change(topology,'started')
+  if _status.is_directory_locked():                   # If we're using the lock file, touch it after we're done
+    _status.lock_directory()                          # .. to have a timestamp of when the lab was started

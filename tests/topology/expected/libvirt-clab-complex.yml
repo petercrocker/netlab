@@ -136,6 +136,8 @@ nodes:
       config_templates:
       - hosts:/etc/hosts
       kind: linux
+      ports:
+      - '2004:22'
     device: linux
     hostname: clab-input-h1
     id: 4
@@ -191,6 +193,8 @@ nodes:
       config_templates:
       - hosts:/etc/hosts
       kind: linux
+      ports:
+      - '2005:22'
     device: linux
     hostname: clab-input-h2
     id: 5
@@ -273,7 +277,11 @@ nodes:
         passive: false
       type: p2p
     loopback:
+      ifindex: 0
+      ifname: Loopback0
       ipv4: 10.0.0.1/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: GigabitEthernet0/0
       ipv4: 192.168.121.101
@@ -340,7 +348,11 @@ nodes:
         passive: false
       type: lan
     loopback:
+      ifindex: 0
+      ifname: Loopback0
       ipv4: 10.0.0.2/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: GigabitEthernet0/0
       ipv4: 192.168.121.102
@@ -359,8 +371,11 @@ nodes:
     box: ceos:4.26.4M
     clab:
       env:
+        CLAB_MGMT_VRF: management
         INTFTYPE: et
       kind: ceos
+      ports:
+      - '2003:22'
     device: eos
     hostname: clab-input-r3
     id: 3
@@ -421,7 +436,11 @@ nodes:
       role: stub
       type: lan
     loopback:
+      ifindex: 0
+      ifname: Loopback0
       ipv4: 10.0.0.3/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: Management0
       ipv4: 192.168.121.103

@@ -96,13 +96,24 @@ nodes:
       ipv4: true
       vpnv4: true
     bgp:
+      _cprop_order:
+      - standard
+      - extended
+      - large
+      - link-bandwidth
       advertise_loopback: true
       as: 65000
       community:
         ebgp:
         - standard
+        - large
         ibgp:
         - standard
+        - large
+        - extended
+        ibgp_localas:
+        - standard
+        - large
         - extended
       ipv4: true
       neighbors:
@@ -123,6 +134,7 @@ nodes:
     box: ceos:4.26.4M
     clab:
       env:
+        CLAB_MGMT_VRF: management
         INTFTYPE: et
       kind: ceos
     device: eos
@@ -169,7 +181,11 @@ nodes:
       type: p2p
       vrf: blue
     loopback:
+      ifindex: 0
+      ifname: Loopback0
       ipv4: 10.0.0.1/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: Management0
       ipv4: 192.168.121.101
@@ -267,13 +283,24 @@ nodes:
       ipv4: true
       vpnv4: true
     bgp:
+      _cprop_order:
+      - standard
+      - extended
+      - large
+      - link-bandwidth
       advertise_loopback: true
       as: 65000
       community:
         ebgp:
         - standard
+        - large
         ibgp:
         - standard
+        - large
+        - extended
+        ibgp_localas:
+        - standard
+        - large
         - extended
       ipv4: true
       neighbors:
@@ -294,6 +321,7 @@ nodes:
     box: ceos:4.26.4M
     clab:
       env:
+        CLAB_MGMT_VRF: management
         INTFTYPE: et
       kind: ceos
     device: eos
@@ -329,7 +357,11 @@ nodes:
       type: p2p
       vrf: red
     loopback:
+      ifindex: 0
+      ifname: Loopback0
       ipv4: 10.0.0.2/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: Management0
       ipv4: 192.168.121.102
@@ -398,13 +430,24 @@ nodes:
       ipv4: true
       vpnv4: true
     bgp:
+      _cprop_order:
+      - standard
+      - extended
+      - large
+      - link-bandwidth
       advertise_loopback: true
       as: 65000
       community:
         ebgp:
         - standard
+        - large
         ibgp:
         - standard
+        - large
+        - extended
+        ibgp_localas:
+        - standard
+        - large
         - extended
       ipv4: true
       neighbors:
@@ -425,6 +468,7 @@ nodes:
     box: ceos:4.26.4M
     clab:
       env:
+        CLAB_MGMT_VRF: management
         INTFTYPE: et
       kind: ceos
     device: eos
@@ -471,7 +515,11 @@ nodes:
       virtual_interface: true
       vrf: blue
     loopback:
+      ifindex: 0
+      ifname: Loopback0
       ipv4: 10.0.0.3/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: Management0
       ipv4: 192.168.121.103

@@ -4,7 +4,7 @@
 
 import typing,typing_extensions
 from box import Box
-from .. import common
+from . import types
 
 #
 # I had enough -- here's a function that returns a box with proper default settings
@@ -14,6 +14,18 @@ def get_box(init: dict) -> Box:
 
 def get_empty_box() -> Box:
   return get_box({})
+
+#
+# Another thingy we need all the time: make something a list
+
+def get_a_list(x: typing.Any, ctx: typing.Optional[str] = None) -> list:
+  if isinstance(x,list):
+    return x
+  if isinstance(x,dict):
+    from ..utils import log
+    log.fatal(f'Internal error: expected something that could be made into a list, got {x}')
+
+  return [ x ]
 
 #
 # Change all NULL values in a nested dictionary structure to empty strings
@@ -113,3 +125,40 @@ is_true_int: work around the Python stupidity of bools being ints
 
 def is_true_int(data: typing.Any) -> typing_extensions.TypeGuard[int]:
   return isinstance(data,int) and not isinstance(data,bool)
+
+"""
+find_in_list: Find if any of the specified elements is in list, return index or None
+"""
+
+def find_in_list(value: list, target: list) -> typing.Optional[int]:
+  for v in value:
+    try:
+      return target.index(v)
+    except:
+      continue
+
+  return None
+
+"""
+Lookup a netlab keyword, return a list of device keyword(s)
+"""
+def kw_lookup(lookup_table: typing.Union[dict,Box], kw: str) -> list:
+  if not kw in lookup_table:                      # Do we know what to do?
+    return []                                     # ... nope, it's better to skip this one
+  
+  v = lookup_table[kw]                            # Get the lookup value
+  if v is None or v is True:                      # No translation, use the original keyword
+    return [ kw ]
+  elif v is False:                                # This keyword is not supported, skip it
+    return []
+  else:
+    return v if isinstance(v,list) else [ v ]     # ... otherwise return the translated value as a list
+
+def kw_list_transform(lookup_table: typing.Union[dict,Box], kw_list: list) -> list:
+  xf_list = []
+  for kw in kw_list:
+    for lookup_kw in kw_lookup(lookup_table,kw):
+      if not lookup_kw in xf_list:
+        xf_list.append(lookup_kw)
+
+  return xf_list

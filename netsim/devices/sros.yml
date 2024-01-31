@@ -30,6 +30,7 @@ features:
       ipv4: True
       ipv6: True
       network: False # SROS treats the interfaces as point-to-point and forms at most 1 adjacency
+  bfd: True
   bgp:
     local_as: True
     vrf_local_as: True
@@ -42,9 +43,9 @@ features:
     asymmetrical_irb: True
   mpls:
     ldp: True
-    # bgp: True
+    bgp: True  # BGP-LU
     vpn: True
-    # 6pe: True
+    6pe: True  # also implies BGP-LU
   vxlan:
     requires: [ evpn ] # Current implementation focuses on VXLAN+EVPN, device supports static too
   vlan:
@@ -55,6 +56,9 @@ features:
     native_routed: True
   gateway:
     protocol: [ anycast, vrrp ]
+  sr: True
+  srv6: True
+  vrf: True
 
 clab:
   image: vrnetlab/vr-sros

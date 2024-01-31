@@ -8,12 +8,23 @@ The data transformation has three major steps:
 * [Global](#global-data-transformation), [node](#node-data-transformation) and [link](#link-data-transformation) data transformation
 * [Final Steps and Cleanup](#final-steps-and-cleanup)
 
+```eval_rst
+.. contents:: Table of Contents
+   :depth: 2
+   :local:
+   :backlinks: none
+```
+
 ## Setup Phase
 
 * Read topology file
 * Read customer and system [default settings](../defaults.md) (`topology-defaults.yml`) and [merge them](../defaults.md#deep-merging) with the topology file (`netsim.read_topology.load`)
-* Check for presence of required top-level topology elements (`netsim.augment.topology.check_required_elements`)
+* Perform the basic sanity checks (`netsim.augment.topology.topology_sanity_check`)
+* Check minimum _netlab_ version (`netsim.utils.versioning.check_topology_version`)
 * Adjust the nodes data structure: transform [list of strings](nodes-list-of-strings) into a dictionary with empty values (`netsim.augment.nodes.create_node_dict`)
+* Check basic group data structures and auto-create nodes from group members (`augment.groups.precheck_groups`)
+* Initialize [plugin system](../plugins.md): load all plugins listed in the **plugin** top-level element (`netsim.augment.plugin.init`)
+* Execute plugin **topology_expand** hook (`netsim.augment.plugin.execute`) for plugins that augment lab topology structures (example: [](../plugins/fabric.md))
 
 * Initialize the link list (`netsim.augment.links.links_init`)
   * Transform [strings or lists of nodes](../example/link-definition.md) into link dictionaries (`netsim.augment.links.adjust_link_list`)
@@ -21,12 +32,15 @@ The data transformation has three major steps:
   * Expand [link groups](link-groups) (`netsim.augment.links.expand_groups`)
   * Set **linkindex** attributes (`netsim.augment.links.set_linkindex`)
 
-* Initialize [plugin system](../plugins.md): load all plugins listed in the **plugin** top-level element (`netsim.augment.plugin.init`)
+* Expand topology components (`netsim.augment.components.expand_components`)
 * Execute plugin **init** hook (`netsim.augment.plugin.execute`)
-* Extend **default.attributes** with **default.extra_attributes** (`netsim.augment.topology.extend_attribute_list`)
-* Initialize node groups (`netsim.augment.groups.init_groups`):
+* Process external **tools** (`augment.tools.process_tools`)
+* Check for the presence of required top-level topology elements (`netsim.augment.topology.check_required_elements`)
 
-	* Check the group data structures
+* Initialize attribute validation (`netsim.data.validate.init_validation`)
+* Complete node group initialization (`netsim.augment.groups.init_groups`):
+
+	* Check the attributes in the group data structures
 	* Add group members based on nodes' **group** attribute
 	* Check recursive groups
 	* Copy group **device** and **module** attribute into nodes
@@ -79,6 +93,7 @@ The data transformation has three major steps:
 
 ## Final Steps and Cleanup
 
+* Transform the lab validation data structure (`netsim.augment.validate.process_validation`)
 * Execute **post_transform** module functions (`netsim.modules.post_transform`):
 
   * Check whether the lab devices support modules configured on them (`netsim.modules.check_supported_node_devices`)
@@ -88,8 +103,12 @@ The data transformation has three major steps:
   * Sort node module lists in order of module dependencies -- a module dependent on another module will be configured after it (`netsim.modules.reorder_node_modules`)
 
 * Execute **post_transform** plugin hooks
-* Merge group-level and node-level [custom deployment templates](../groups.md#custom-configuration-templates) (`netsim.augment.groups.node_config_template`)
-* Delete temporary data structures from the topology (list of plugin modules, addressing pools, pointer to provider module)
+* Merge group-level and node-level [custom deployment templates](custom-config) (`netsim.augment.groups.node_config_template`)
+* Execute **post_transform** provider hooks
+* Process device quirks
+* Cleanup links: remove empty **links** list and **_linkname** attribute from individual links
+* Cleanup groups: remove settings (keys starting with '\_') from **groups** dictionary
+* Delete temporary data structures from the topology: list of plugin modules, addressing pools, and pointers to provider modules.
 
 ## Configuration Module Transformations
 
@@ -129,3 +148,36 @@ For every node using the specified module, execute **node_** hook (**node_pre_de
 ### Link-Level Module Hooks
 
 For every link that has at least one node using the specified module, execute **link_** hook (**link_pre_default**, **link_pre_transform**, **link_post_transform**).
+
+(dev-transform-debugging)=
+## Debugging the Transformation Process
+
+`netlab create` command (the primary user of the transformation process) has a hidden `--debug` option that sets numerous debugging flags, allowing you to debug a subset of transformation components.
+
+The following debugging flags can be used in _netlab_ release 1.6.4[^DF] to debug the core components:
+
+* **all**: turn on all debugging flags
+* **addr**: debug addressing pools
+* **addressing**: debug IPAM logic
+* **cli**: debug CLI actions
+* **defaults**: debug user/system defaults
+* **groups**: debug netlab group processing
+* **links**: debug the core link transformation code
+* **modules**: debug generic configuration module routines
+* **plugin**: debug plugin loading process and plugin calls
+* **template**: debug common Jinja2 templating routines
+* **validate**: debug the data validation logic
+
+Some modules are so complex that we gave them separate debugging flags:
+
+* **vlan**: debug VLAN module
+* **vrf**: debug VRF module
+
+You can also debug components involved in lab management process:
+
+* **external**: debug invocation of external programs
+* **libvirt**: debug _libvirt_ provider
+* **status**: debug the 'lab status' code
+* **quirks**: debug device quirks code
+
+[^DF]: Execute `netlab create --debug help` to display the up-to-date set of debugging flags. The error message will tell you `help` value is an invalid choice for the `--debug` argument but also display the valid values.

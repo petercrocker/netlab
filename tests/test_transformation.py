@@ -10,20 +10,22 @@ import glob
 import pathlib
 import pytest
 import difflib
+import pathlib
 from box import Box
 
 import utils
 
-from netsim import common
-from netsim import read_topology
+from netsim.utils import log,strings,read as _read
 from netsim import augment
 from netsim.outputs import _TopologyOutput,ansible
+from netsim.data import types as _types
 
-def run_test(fname,local_defaults="topology-defaults.yml",sys_defaults="package:topology-defaults.yml"):
-  topology = read_topology.load(fname,local_defaults,sys_defaults)
-  common.exit_on_error()
+def run_test(fname):
+  log.init_log_system(header = False)
+  topology = _read.load(fname,relative_topo_name=True)
+  log.exit_on_error()
   augment.main.transform(topology)
-  common.exit_on_error()
+  log.exit_on_error()
   return topology
 
 @pytest.mark.filterwarnings("ignore::PendingDeprecationWarning")
@@ -46,7 +48,7 @@ def test_transformation_cases(tmpdir):
         if output_module:
           output_module.write(Box(topology))
         else:
-          common.error('Unknown output format %s' % output_format,common.IncorrectValue,'create')
+          log.error('Unknown output format %s' % output_format,log.IncorrectValue,'create')
 
     result = utils.transformation_results_yaml(topology)
     exp_test_case = "topology/expected/"+os.path.basename(test_case)
@@ -67,33 +69,30 @@ def test_transformation_cases(tmpdir):
 def test_verbose_cases(tmpdir):
   if not sys.gettrace():
     return
-  common.set_verbose()
+  log.set_verbose()
   test_transformation_cases(tmpdir)
 
 @pytest.mark.filterwarnings("ignore::PendingDeprecationWarning")
 def test_error_cases():
   print("Starting error test cases")
-  common.set_flag(raise_error = True)
+  log.set_flag(raise_error = True)
   for test_case in list(glob.glob('errors/*yml')):
     print("Test case: %s" % test_case)
-    common.err_count = 0
-    with pytest.raises(common.ErrorAbort):
+    log.err_count = 0
+    with pytest.raises(log.ErrorAbort):
       topo = run_test(test_case)
 
-"""
-With the expanded default settings, it became impractical to run test cases
-without the defaults. These test cases have been migrated into errors
+    error_log = log.get_error_log()
+    log_file = pathlib.Path(test_case.replace('.yml','.log'))
+    if log_file.exists():
+      with log_file.open() as f:
+        log_lines = [line.rstrip('\n') for line in f]
 
-@pytest.mark.filterwarnings("ignore::PendingDeprecationWarning")
-def test_minimal_cases():
-  print("Starting minimal (no-default) test cases")
-  common.set_flag(raise_error = True)
-  for test_case in list(glob.glob('minimal_errors/*yml')):
-    print("Test case: %s" % test_case)
-    common.err_count = 0
-    with pytest.raises(common.ErrorAbort):
-      run_test(test_case,None,None)
-"""
+      if error_log != log_lines:
+        error_log_text = "\n".join(error_log)
+        expected_text  = "\n".join(log_lines)
+        print(f'Accumulated error log\n{"=" * 70}\n{error_log_text}\n\nExpected log\n{"=" * 70}\n{expected_text}')
+      assert error_log == log_lines
 
 if __name__ == "__main__":
   test_transformation_cases("/tmp")

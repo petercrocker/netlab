@@ -50,7 +50,8 @@ links:
     ifname: eth1
     ipv4: 172.16.0.3/24
     node: h1
-  - ifindex: 1
+  - _vlan_mode: irb
+    ifindex: 1
     ifname: Ethernet1
     ipv4: 172.16.0.1/24
     node: s1
@@ -71,7 +72,8 @@ links:
     ifname: eth1
     ipv4: 172.16.1.4/24
     node: h2
-  - ifindex: 1
+  - _vlan_mode: irb
+    ifindex: 1
     ifname: Ethernet1
     ipv4: 172.16.1.2/24
     node: s2
@@ -92,7 +94,8 @@ links:
     ifname: eth1
     ipv4: 172.16.2.5/24
     node: h3
-  - ifindex: 2
+  - _vlan_mode: irb
+    ifindex: 2
     ifname: Ethernet2
     ipv4: 172.16.2.1/24
     node: s1
@@ -113,7 +116,8 @@ links:
     ifname: eth1
     ipv4: 172.16.3.6/24
     node: h4
-  - ifindex: 2
+  - _vlan_mode: irb
+    ifindex: 2
     ifname: Ethernet2
     ipv4: 172.16.3.2/24
     node: s2
@@ -274,13 +278,24 @@ nodes:
       ipv4: true
       vpnv4: true
     bgp:
+      _cprop_order:
+      - standard
+      - extended
+      - large
+      - link-bandwidth
       advertise_loopback: true
       as: 65000
       community:
         ebgp:
         - standard
+        - large
         ibgp:
         - standard
+        - large
+        - extended
+        ibgp_localas:
+        - standard
+        - large
         - extended
       ipv4: true
       neighbors:
@@ -387,7 +402,11 @@ nodes:
         mode: irb
       vrf: tenant
     loopback:
+      ifindex: 0
+      ifname: Loopback0
       ipv4: 10.0.0.1/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: Management1
       ipv4: 192.168.121.101
@@ -538,18 +557,30 @@ nodes:
       - red
       - blue
       vtep: 10.0.0.1
+      vtep_interface: Loopback0
   s2:
     af:
       ipv4: true
       vpnv4: true
     bgp:
+      _cprop_order:
+      - standard
+      - extended
+      - large
+      - link-bandwidth
       advertise_loopback: true
       as: 65000
       community:
         ebgp:
         - standard
+        - large
         ibgp:
         - standard
+        - large
+        - extended
+        ibgp_localas:
+        - standard
+        - large
         - extended
       ipv4: true
       neighbors:
@@ -656,7 +687,11 @@ nodes:
         mode: irb
       vrf: tenant
     loopback:
+      ifindex: 0
+      ifname: Loopback0
       ipv4: 10.0.0.2/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: Management1
       ipv4: 192.168.121.102
@@ -807,6 +842,7 @@ nodes:
       - red
       - blue
       vtep: 10.0.0.2
+      vtep_interface: Loopback0
 ospf:
   area: 0.0.0.0
 provider: libvirt

@@ -25,6 +25,7 @@ You MUST use **netlab up** to start the lab to ensure the virtual machines get c
 
 We tested _netlab_ with Vagrant version 2.3.4 and vagrant-libvirt plugin version 0.11.2. These are also the versions installed by **netlab install libvirt** command.
 
+(libvirt-vagrant-boxes)=
 ## Vagrant Boxes
 
 Vagrant starts virtual machines from prepackaged VM images called *boxes*. While it's possible to download some network device images from Vagrant Cloud, you'll have to build most of the boxes you'd want to use in your lab.
@@ -186,11 +187,12 @@ The only way to assign management IP addresses to network devices started as vir
 
 If you want your virtual machines to have fixed management IP addresses (for example, to be accessed from an external management tool), change the **addressing.mgmt** parameters, set node **id** parameters to the desired values, and let *netlab* do the rest of the work.
 
+(libvirt-port-forwarding)=
 ### Port Forwarding
 
 *netlab* supports *vagrant-libvirt* port forwarding -- mapping of TCP ports on VM management IP address to ports on the host. You can use port forwarding to access the lab devices via the host external IP address without exposing the management network to the outside world.
 
-Port forwarding is disabled by default and can be enabled by configuring the **defaults.providers.libvirt.forwarded** dictionary. Dictionary keys are TCP port names (ssh, http, https, netconf, gnmi), dictionary values are start values of host ports. *netlab* assigns a unique host port to every VM forwarded port based on the start value and VM node ID.
+Port forwarding is disabled by default and can be enabled by configuring the **defaults.providers.libvirt.forwarded** dictionary. Dictionary keys are TCP port names (ssh, http, https, netconf), dictionary values are start values of host ports. *netlab* assigns a unique host port to every VM forwarded port based on the start value and VM node ID.
 
 For example, when given the following topology...
 

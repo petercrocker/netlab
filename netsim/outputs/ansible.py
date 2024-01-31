@@ -7,10 +7,10 @@ import yaml
 import os
 from box import Box
 
-from .. import common
 from . import _TopologyOutput,check_writeable
 from ..augment import nodes
 from ..augment import devices
+from ..augment import plugin
 from ..utils import templates,strings,log
 from ..utils import files as _files
 
@@ -66,11 +66,25 @@ def ansible_inventory_host(node: Box, topology: Box) -> Box:
   provider_inventory_settings(host,node,topology)
   return host
 
+"""
+Copy defaults.paths dictionary into ALL group. Create separate variables
+from individual customizable paths to prevent dependencies on too many
+variables that might not be set (example: only 'paths.custom' values should
+depend on 'custom_config' variable)
+"""
+def copy_paths(inventory: Box, topology: Box) -> None:
+  if 'paths' not in topology.defaults:
+    return
+  
+  for k,v in topology.defaults.paths.items():
+    inventory.all.vars[f'paths_{k}'] = v
+
 def create(topology: Box) -> Box:
   inventory = Box({},default_box=True,box_dots=True)
 
   inventory.all.vars.netlab_provider = topology.defaults.provider
   inventory.all.vars.netlab_name = topology.name
+  copy_paths(inventory,topology)
 
   inventory.modules.hosts = {}
   inventory.custom_configs.hosts = {}
@@ -87,15 +101,19 @@ def create(topology: Box) -> Box:
         if ('_pfx' in k) or ('_eui' in k):
           del pool[k]
 
+  extra_groups: dict = {                    # Extra groups created in Ansible inventory
+    'module':  'modules',                   # Devices using configuration modules
+    'config':  'custom_configs',            # Devices using custom configuration
+    '_daemon': 'daemons'                    # Daemons
+  }
+
   for name,node in topology.nodes.items():
     group = node.get('device','all')
     inventory[group].hosts[name] = ansible_inventory_host(node,topology)
 
-    if 'module' in node:
-      inventory.modules.hosts[name] = {}
-
-    if 'config' in node:
-      inventory.custom_configs.hosts[name] = {}
+    for xg in extra_groups.keys():
+      if node.get(xg,False):                # Add device to the extra group if it has the corresponding attribute set
+        inventory[extra_groups[xg]].hosts[name] = {}
 
   if 'devices' in defaults:
     for group in inventory.keys():
@@ -104,6 +122,12 @@ def create(topology: Box) -> Box:
         group_vars = devdata.group_vars + devdata[defaults.provider].group_vars
         if group_vars:
           inventory[group]['vars'] = group_vars
+
+  if (inventory.custom_configs.hosts):
+    try:
+      inventory.custom_configs.vars.netlab_custom_config = plugin.sort_extra_config(topology)
+    except log.FatalError as ex:
+      log.fatal(f'Cannot sort custom configuration requests: {str(ex)}','ansible')
 
   if not 'groups' in topology:
     return inventory
@@ -131,7 +155,7 @@ def dump(data: Box) -> None:
   print("Ansible inventory data")
   print("===============================")
   inventory = create(data)
-  print(common.get_yaml_string(inventory))
+  print(strings.get_yaml_string(inventory))
 
 def write_yaml(data: Box, fname: str, header: str) -> None:
   dirname = os.path.dirname(fname)
@@ -155,15 +179,17 @@ def ansible_inventory(topology: Box, fname: typing.Optional[str] = 'hosts.yml', 
 
   if hostvars == "min":
     write_yaml(inventory,fname,header)
-    print("Created single-file Ansible inventory %s" % fname)
+    log.status_created()
+    print(f"single-file Ansible inventory {fname}")
     return
 
   for g in inventory.keys():
     gvars = inventory[g].pop('vars',None)
     if gvars:
       write_yaml(gvars,'group_vars/%s/topology.yml' % g,header)
-      if not common.QUIET:
-        print("Created group_vars for %s" % g)
+      if not log.QUIET:
+        strings.print_colored_text('[GROUPS]  ','bright_cyan','Created ')
+        print(f"group_vars for {g}")
 
     if 'hosts' in inventory[g]:
       hosts = inventory[g]['hosts']
@@ -179,12 +205,14 @@ def ansible_inventory(topology: Box, fname: typing.Optional[str] = 'hosts.yml', 
             vars_host[item] = hosts[h][item]
 
         write_yaml(vars_host,'host_vars/%s/topology.yml' % h,header)
-        if not common.QUIET:
-          print("Created host_vars for %s" % h)
+        if not log.QUIET:
+          strings.print_colored_text('[HOSTS]   ','bright_cyan','Created ')
+          print(f"host_vars for {h}")
         hosts[h] = min_host
 
   write_yaml(inventory,fname,header)
-  print("Created minimized Ansible inventory %s" % fname)
+  log.status_created()
+  print(f"minimized Ansible inventory {fname}")
 
 def ansible_config(config_file: typing.Union[str,None] = 'ansible.cfg', inventory_file: typing.Union[str,None] = 'hosts.yml') -> None:
   if not config_file:
@@ -204,10 +232,13 @@ def ansible_config(config_file: typing.Union[str,None] = 'ansible.cfg', inventor
       module='ansible')
 
   _files.create_file_from_text(config_file,cfg_text)
-  if not common.QUIET:
-    print("Created Ansible configuration file: %s" % config_file)
+  if not log.QUIET:
+    log.status_created()
+    print(f"Ansible configuration file: {config_file}")
 
 class AnsibleInventory(_TopologyOutput):
+
+  DESCRIPTION :str = 'Ansible inventory and configuration file'
 
   def write(self, topology: Box) -> None:
     check_writeable('Ansible inventory')
@@ -220,7 +251,7 @@ class AnsibleInventory(_TopologyOutput):
       if len(self.filenames) > 1:
         configfile = self.filenames[1]
       if len(self.filenames) > 2:
-        common.error('Extra output filename(s) ignored: %s' % str(self.filenames[2:]),common.IncorrectValue,'ansible')
+        log.error('Extra output filename(s) ignored: %s' % str(self.filenames[2:]),log.IncorrectValue,'ansible')
 
     if self.format:
       output_format = self.format[0]

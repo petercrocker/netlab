@@ -32,6 +32,15 @@ groups:
     node_data:
       bgp:
         as: 65001
+  g3:
+    _default_group: true
+    device: eos
+    members:
+    - a
+  g4:
+    _default_group: true
+    device: eos
+    members: []
 input:
 - topology/input/groups-node-data.yml
 - package:topology-defaults.yml
@@ -43,13 +52,24 @@ nodes:
     af:
       ipv4: true
     bgp:
+      _cprop_order:
+      - standard
+      - extended
+      - large
+      - link-bandwidth
       advertise_loopback: true
       as: 65000
       community:
         ebgp:
         - standard
+        - large
         ibgp:
         - standard
+        - large
+        - extended
+        ibgp_localas:
+        - standard
+        - large
         - extended
       ipv4: true
       neighbors:
@@ -67,14 +87,18 @@ nodes:
         type: ibgp
       next_hop_self: true
       router_id: 10.0.0.1
-    box: CumulusCommunity/cumulus-vx:4.4.0
-    device: cumulus
+    box: arista/veos
+    device: eos
     id: 1
     interfaces: []
     loopback:
+      ifindex: 0
+      ifname: Loopback0
       ipv4: 10.0.0.1/32
+      neighbors: []
+      type: loopback
     mgmt:
-      ifname: eth0
+      ifname: Management1
       ipv4: 192.168.121.101
       mac: 08:4f:a9:00:00:01
     module:
@@ -89,8 +113,14 @@ nodes:
       community:
         ebgp:
         - standard
+        - large
         ibgp:
         - standard
+        - large
+        - extended
+        ibgp_localas:
+        - standard
+        - large
         - extended
       ipv4: true
       neighbors:
@@ -113,7 +143,11 @@ nodes:
     id: 2
     interfaces: []
     loopback:
+      ifindex: 0
+      ifname: lo
       ipv4: 10.0.0.2/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: eth0
       ipv4: 192.168.121.102
@@ -130,8 +164,14 @@ nodes:
       community:
         ebgp:
         - standard
+        - large
         ibgp:
         - standard
+        - large
+        - extended
+        ibgp_localas:
+        - standard
+        - large
         - extended
       ipv4: true
       neighbors:
@@ -154,7 +194,11 @@ nodes:
     id: 3
     interfaces: []
     loopback:
+      ifindex: 0
+      ifname: lo
       ipv4: 10.0.0.3/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: eth0
       ipv4: 192.168.121.103
@@ -171,8 +215,14 @@ nodes:
       community:
         ebgp:
         - standard
+        - large
         ibgp:
         - standard
+        - large
+        - extended
+        ibgp_localas:
+        - standard
+        - large
         - extended
       ipv4: true
       neighbors:
@@ -195,7 +245,11 @@ nodes:
     id: 4
     interfaces: []
     loopback:
+      ifindex: 0
+      ifname: lo
       ipv4: 10.0.0.4/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: eth0
       ipv4: 192.168.121.104
@@ -212,8 +266,14 @@ nodes:
       community:
         ebgp:
         - standard
+        - large
         ibgp:
         - standard
+        - large
+        - extended
+        ibgp_localas:
+        - standard
+        - large
         - extended
       ipv4: true
       neighbors:
@@ -236,7 +296,11 @@ nodes:
     id: 5
     interfaces: []
     loopback:
+      ifindex: 0
+      ifname: lo
       ipv4: 10.0.0.5/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: eth0
       ipv4: 192.168.121.105
@@ -253,8 +317,14 @@ nodes:
       community:
         ebgp:
         - standard
+        - large
         ibgp:
         - standard
+        - large
+        - extended
+        ibgp_localas:
+        - standard
+        - large
         - extended
       ipv4: true
       neighbors:
@@ -277,7 +347,11 @@ nodes:
     id: 6
     interfaces: []
     loopback:
+      ifindex: 0
+      ifname: lo
       ipv4: 10.0.0.6/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: eth0
       ipv4: 192.168.121.106

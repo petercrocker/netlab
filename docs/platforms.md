@@ -6,58 +6,47 @@
    :local:
 ```
 
+(platform-devices)=
 ## Supported Virtual Network Devices
 
-*netlab* supports these virtual network devices or their physical equivalents (when using *external* [virtualization provider](providers.md)). If you want to use an unsupported device in a *netlab*-managed lab, use [an unknown device](platform-unknown) or [contribute a new device implementation](dev/devices.md).
+*netlab* supports these virtual network devices or their physical equivalents (when using *external* [virtualization provider](providers.md)).
 
 | Virtual network device                    | netlab device type |
 | ----------------------------------------- | ------------------ |
 | Arista vEOS                               | eos                |
 | Aruba AOS-CX [❗](caveats-aruba)          | arubacx        |
 | Cisco ASAv                                | asav               |
-| Cisco CSR 1000v                           | csr                |
-| Cisco IOSv                                | iosv               |
-| Cisco IOS XRv                             | iosxr [❗](caveats-iosxr)              |
-| Cisco Nexus 9300v                         | nxos               |
-| Cumulus Linux 4.x/5.x                     | cumulus            |
-| Cumulus Linux 5.0 (NVUE)                            | cumulus_nvue [❗](caveats-cumulus-nvue)           |
-| Dell OS10                                 | dellos10           |
-| Fortinet FortiOS [❗](caveats-fortios) | fortios            |
-| FRRouting (FRR)                           | frr                |
+| Cisco CSR 1000v [❗](caveats-csr)         | csr                |
+| Cisco IOSv [❗](caveats-iosv)             | iosv               |
+| Cisco IOS XRv  [❗](caveats-iosxr)        | iosxr              |
+| Cisco Nexus 9300v [❗](caveats-nxos)      | nxos               |
+| Cumulus Linux 4.x/5.x [❗](caveats-cumulus) | cumulus            |
+| Cumulus Linux 5.0 (NVUE) [❗](caveats-cumulus-nvue)                            | cumulus_nvue           |
+| Dell OS10 [❗](caveats-os10).             | dellos10           |
+| Fortinet FortiOS [❗](caveats-fortios)    | fortios            |
+| FRRouting (FRR) [❗](caveats-frr)         | frr                |
 | [Generic Linux host](labs/linux.md)       | linux              |
-| Juniper vMX                               | vmx                |
+| Juniper vMX [❗](caveats-vmx)             | vmx                |
 | Juniper vPTX (vJunos EVO) [❗](caveats-vptx) | vptx               |
-| Juniper vSRX 3.0                          | vsrx               |
-| Mikrotik RouterOS 6 (CHR)                 | routeros           |
+| Juniper vSRX 3.0 [❗](caveats-vsrx)       | vsrx               |
+| Mikrotik RouterOS 6 (CHR) [❗](caveats-routeros6) | routeros           |
 | Mikrotik RouterOS 7 (CHR) [❗](caveats-routeros7) | routeros7           |
-| Nokia SR Linux [❗](caveats-srlinux) | srlinux            |
-| Nokia SR OS [❗](caveats-sros) | sros               |
-| VyOS 1.4 [❗](caveats-vyos)         | vyos               |
+| Nokia SR Linux [❗](caveats-srlinux)      | srlinux            |
+| Nokia SR OS [❗](caveats-sros)            | sros               |
+| VyOS 1.4 [❗](caveats-vyos)               | vyos               |
+
+(platform-daemons)=
+*netlab* also supports the following daemons (control-plane software running on Linux VMs or containers):
+
+| Daemon                         | netlab device type |
+| ------------------------------ | ------------------ |
+| BIRD Internet Routing Daemon   | bird               |                               
 
 **Notes:**
 
-To specify the device type of a node in your virtual lab:
-
-* Specify **device** property in node data
-
-```
-nodes:
-- name: c_ios
-  device: iosv
-- name: c_csr
-  device: csr
-```
-
-* Use **defaults.device** setting in lab topology
-
-```
-defaults:
-  device: cumulus
-
-nodes: [ s1, s2, s3 ]
-```
-
-See [lab topology overview](topology-overview.md) for more details.
+* Use the **[netlab show devices](netlab-show-devices)** command to display the list of supported devices and daemons.
+* You can specify the device type in the **device** property of the [node data](node-attributes) or the topology-wide **[defaults.device](defaults.md)** setting. See [lab topology overview](topology-overview.md) for more details.
+* If you want to use an unsupported device in a *netlab*-managed lab, use [an unknown device](platform-unknown) or [contribute a new device implementation](dev/devices.md).
 
 ## Supported Virtualization Providers
 
@@ -75,7 +64,7 @@ You cannot use all supported network devices with all virtualization providers. 
 | Virtual network device | Vagrant<br />Libvirt | Vagrant<br />Virtualbox | Containerlab |
 | -------------------------------------------------- | :-: | :-: | :-: |
 | Arista vEOS                                        |          ✅           |              ✅               |            ✅             |
-| Aruba AOS-CX                                       |          ✅           |              ❌               |            ❌             |
+| Aruba AOS-CX                                       |          ✅           |              ❌               |            ✅             |
 | Cisco ASAv                                         |          ✅           |              ❌               |            ❌             |
 | Cisco IOSv                                         |          ✅           |    ✅    |            ❌             |
 | Cisco IOS XRv                                      |          ✅           |    ❌     |            ❌             |
@@ -88,7 +77,7 @@ You cannot use all supported network devices with all virtualization providers. 
 | FRR | ✅[❗](caveats-frr) | ✅[❗](caveats-frr) | ✅ |
 | Generic Linux (Ubuntu/Alpine) [❗](labs/linux.md) |          ✅           |              ✅               |            ✅             |
 | Juniper vMX                                        |          ❌           | ❌ |            ✅[❗](caveats-vmx)             |
-| Juniper vPTX                                       |          ✅           | ❌                            |            ❌            |
+| Juniper vPTX                                       |          ✅           | ❌                            |            ✅            |
 | Juniper vSRX 3.0                                   |          ✅           | ✅ |            ✅[❗](caveats-vsrx)             |
 | Mikrotik RouterOS 6                                |          ✅           |              ❌               |            ❌             |
 | Mikrotik RouterOS 7                                |          ✅           |              ❌               |            ❌             |
@@ -127,10 +116,11 @@ Configuration files for Virtualbox and KVM/libvirt environments specify the numb
 
 Ansible playbooks included with **netlab** can deploy and collect device configuration on these network operating systems:
 
+(platform-config-support)=
 | Operating system      | Deploy configuration | Collect configuration |
 | --------------------- | :------------------: | :-------------------: |
 | Arista EOS            |          ✅           |           ✅           |
-| Aruba AOS-CX          |          ✅           |           ❌           |
+| Aruba AOS-CX          |          ✅           |           ✅           |
 | Cisco ASAv            |          ✅           |           ✅           |
 | Cisco IOS / IOS XE    |          ✅           |           ✅           |
 | Cisco IOS XRv         |          ✅           |           ✅           |
@@ -138,7 +128,7 @@ Ansible playbooks included with **netlab** can deploy and collect device configu
 | Cumulus Linux         |          ✅           |           ✅           |
 | Dell OS10             |          ✅           |           ✅           |
 | Fortinet FortiOS      |          ✅           |           ✅           |
-| FRR                   |  ✅[❗](caveats-frr)  |           ❌           |
+| FRR                   |  ✅[❗](caveats-frr)  | ✅[❗](caveats-frr) |
 | Generic Linux         |          ✅           |           ❌           |
 | Juniper vMX           |          ✅           |           ✅           |
 | Juniper vSRX 3.0      |          ✅           |           ✅           |
@@ -151,8 +141,9 @@ Ansible playbooks included with **netlab** can deploy and collect device configu
 
 ## Initial Device Configurations
 
-The following system-wide features are configured on supported network operating systems as part of initial device configuration:
+The following system-wide features are configured on supported network operating systems as part of the initial device configuration:
 
+(platform-initial-config)=
 | Operating system      | Hostname | IPv4 hosts |           LLDP            | Loopback<br />IPv4 address | Loopback<br />IPv6 address |
 | --------------------- | :------: | :--------: | :-----------------------: | :------------------------: | :------------------------: |
 | Arista EOS            |    ✅     |     ✅      |             ✅             |             ✅              |             ✅              |
@@ -176,31 +167,33 @@ The following system-wide features are configured on supported network operating
 | Nokia SR OS           |    ✅     |     ✅      |             ✅             |             ✅              |             ✅              |
 | VyOS                  |    ✅     |     ✅      |             ✅             |             ✅              |             ✅              |
 
-The following interface parameters are configured on supported network operating systems as part of initial device configuration:
+(platform-initial-interfaces)=
+The following interface parameters are configured on supported network operating systems as part of the initial device configuration:
 
-| Operating system      | Interface<br />description | Interface<br />bandwidth | MTU |
-| --------------------- | :------------------------: | :----------------------: | :-: |
-| Arista EOS            |            ✅              |            ✅            | ✅ |
-| Aruba AOS-CX          |            ✅              |            ❌            | ✅ |
-| Cisco ASAv            |            ✅              |            ❌            | ✅ |
-| Cisco IOS/IOS XE      |            ✅              |            ✅            | ✅[❗](caveats-iosv) |
-| Cisco IOS XRv         |            ✅              |            ✅ [❗](caveats-iosxr)           | ✅ |
-| Cisco Nexus OS        |            ✅              |            ✅            | ✅ |
-| Cumulus Linux         |            ✅              |            ✅            | ✅ |
-| Cumulus Linux 5.0 (NVUE) |         ✅              |            ✅            | ❌ |
-| Dell OS10             |            ✅              |            ❌            | ✅ |
-| Fortinet FortiOS      |            ✅              |            ✅            | ❌ |
-| FRR                   |            ✅              |            ✅            | ✅ |
-| Generic Linux         |            ❌              |            ❌            | ✅ |
-| Juniper vMX           |            ✅              |            ✅            | ✅ |
-| Juniper vPTX          |            ✅              |            ✅            | ✅ |
-| Juniper vSRX 3.0      |            ✅              |            ✅            | ✅ |
-| Mikrotik RouterOS 6   |            ✅              |            ❌            | ✅ |
-| Mikrotik RouterOS 7   |            ✅              |            ❌            | ✅ |
-| Nokia SR Linux        |            ✅              |            ❌            | ❌ |
-| Nokia SR OS           |            ✅              |            ❌            | ❌ |
-| VyOS                  |            ✅              |            ❌            | ✅ |
+| Operating system      | Interface<br />description | Interface<br />bandwidth | MTU | Additional<br />loopbacks
+| --------------------- |:---:|:---:|:---:|:---:|
+| Arista EOS            | ✅  | ✅  | ✅  | ✅  |
+| Aruba AOS-CX          | ✅  |  ❌  | ✅  | ✅  |
+| Cisco ASAv            | ✅  |  ❌  | ✅  |  ❌  |
+| Cisco IOS/IOS XE      | ✅  | ✅  | ✅[❗](caveats-iosv) | ✅  |
+| Cisco IOS XRv         | ✅  | ✅ [❗](caveats-iosxr) | ✅ |  ❌  |
+| Cisco Nexus OS        | ✅  | ✅  | ✅  | ✅  |
+| Cumulus Linux         | ✅  | ✅  | ✅  | ✅  |
+| Cumulus Linux 5.0 (NVUE) | ✅ | ✅ |  ❌ |  ❌  |
+| Dell OS10             | ✅  |  ❌  | ✅  | ✅  |
+| Fortinet FortiOS      | ✅  | ✅  |  ❌  |  ❌  |
+| FRR                   | ✅  | ✅  | ✅  | ✅  |
+| Generic Linux         |  ❌  |  ❌  | ✅  |  ❌  |
+| Juniper vMX           | ✅  | ✅  | ✅  | ✅  |
+| Juniper vPTX          | ✅  | ✅  | ✅  | ✅  |
+| Juniper vSRX 3.0      | ✅  | ✅  | ✅  | ✅  |
+| Mikrotik RouterOS 6   | ✅  |  ❌  | ✅  |  ❌  |
+| Mikrotik RouterOS 7   | ✅  |  ❌  | ✅  | ✅  |
+| Nokia SR Linux        | ✅  |  ❌  | ✅  | ✅  |
+| Nokia SR OS           | ✅  |  ❌  | ✅  | ✅  |
+| VyOS                  | ✅  |  ❌  | ✅  | ✅  |
 
+(platform-initial-addresses)=
 The following interface addresses are supported on various platforms:
 
 | Operating system      | IPv4<br />addresses | IPv6<br />addresses | Unnumbered<br />interfaces |
@@ -242,10 +235,10 @@ Routing protocol [configuration modules](module-reference.md) are supported on t
 | Cisco IOS XE          | ✅   |  ✅   |  ✅   | ✅  | ✅  |  ❌  | ✅  |
 | Cisco IOS XRv         | ✅   |  ✅   |   ❌   | ✅  |  ❌  |  ❌  |  ❌  |
 | Cisco Nexus OS        | ✅   |  ✅   |  ✅   | ✅  | ✅  | ✅  | ✅  |
-| Cumulus Linux         | ✅   |   ❌   |   ❌   | ✅  |  ❌  | ✅  | ✅  |
-| Cumulus Linux 5.0 (NVUE)        | ✅   |   ❌   |   ❌   | ✅  |  ❌  |  ❌  |  ❌  |
-| Dell OS10             | [❗](caveats-os10) |   ❌   |   ❌   | ✅  | ✅  | ✅  |  ❌  |
-| Fortinet FortiOS      | [❗](caveats-fortios) |   ❌   |   ❌   |   ❌   |  ❌  |  ❌  |  ❌  |
+| Cumulus Linux         | ✅   |   ❌   |   ❌   | ✅  | ✅  | ✅  | ✅  |
+| Cumulus Linux 5.0 (NVUE)        | ✅   |   ❌   |   ❌   | ✅ [❗](caveats-cumulus-nvue)  |  ❌  |  ❌  |  ❌  |
+| Dell OS10             | ✅ [❗](caveats-os10) |   ❌   |   ❌   | ✅  | ✅  | ✅  |  ❌  |
+| Fortinet FortiOS      | ✅ [❗](caveats-fortios) |   ❌   |   ❌   |   ❌   |  ❌  |  ❌  |  ❌  |
 | FRR                   | ✅   |  ✅   |   ❌   | ✅  |  ❌  | ✅  |  ❌  |
 | Juniper vMX           | ✅   |  ✅   |   ❌   | ✅  | ✅  |  ❌  |  ❌  |
 | Juniper vPTX          | ✅   |  ✅   |   ❌   | ✅  | ✅  |  ❌  |  ❌  |
@@ -259,8 +252,14 @@ Routing protocol [configuration modules](module-reference.md) are supported on t
 **Notes:**
 * FRHP = First-Hop Redundancy Protocol (anycast gateway or VRRP)
 
+Routing protocol [configuration modules](module-reference.md) are also supported on these daemons:
+
+| Operating system      | [OSPF](module/ospf.md) | [IS-IS](module/isis.md) | [BGP](module/bgp.md) | [BFD](module/bfd.md) |
+|------------------------------|:--:|:--:|:--:|:--:|
+| BIRD Internet Routing Daemon | ✅ [❗](caveats-bird) | ❌ | ✅ [❗](caveats-bird) | ❌ |
+
 (platform-dataplane-support)=
-The following data plane [configuration modules](module-reference.md) are supported on these devices[^NSM]:
+The data plane [configuration modules](module-reference.md) are supported on these devices[^NSM]:
 
 | Operating system      | [VLAN](module/vlan.md) | [VRF](module/vrf.md) | [VXLAN](module/vxlan.md) | [MPLS](module/mpls.md) | [SR-MPLS](module/sr-mpls.md) | [SRv6](module/srv6.md) |
 | --------------------- | :--: | :-: | :---: | :--: | :-----: | :--: |
@@ -284,7 +283,7 @@ The following data plane [configuration modules](module-reference.md) are suppor
 
 ## IPv6 Support
 
-Core *netlab* functionality and all multi-protocol routing protocol configuration modules fully supports IPv6. OSPFv3 is implemented only on some platforms.
+Core *netlab* functionality and all multi-protocol routing protocol configuration modules fully support IPv6. OSPFv3 is implemented only on some platforms.
 
 | Operating system      | IPv6<br />addresses | OSPFv3 | IS-IS MT | EIGRP<br />IPv6 AF | BGP<br />IPv6 AF | SR-MPLS |
 | --------------------- | :-----------------: | :----: | :------: | :----------------: | :--------------: | :-----: |

@@ -48,6 +48,9 @@ def run_command(
   if isinstance(cmd,str):
     cmd = [ arg for arg in cmd.split(" ") if arg not in (""," ") ]
 
+  if not cmd:                                               # Skip empty commands
+    return True
+
   try:
     result = subprocess.run(cmd,capture_output=check_result,check=True,text=True)
     if log.debug_active('external'):
@@ -62,19 +65,19 @@ def run_command(
       print( f"Error executing {stringify(cmd)}:\n  {ex}" )
     return False
 
-def test_probe(p : typing.Union[str,list,Box]) -> bool:
+def test_probe(p : typing.Union[str,list,Box],quiet : bool = False) -> bool:
   if isinstance(p,str):
-    return bool(run_command(p,check_result=True))
+    return bool(run_command(p,check_result=True,ignore_errors=quiet))
 
   elif isinstance(p,list):
     for p_item in p:
-      if not test_probe(p_item):
+      if not test_probe(p_item,quiet):
         return False
     return True
 
   elif isinstance(p,Box):
     OK = bool(run_command(p.cmd,check_result=True,ignore_errors=True))
-    if not OK:
+    if not OK and not quiet:
       log.fatal(p.err)
     return OK
 
@@ -99,8 +102,9 @@ def run_probes(settings: Box, provider: str, step: int = 0) -> None:
   for p in settings.providers[provider].probe:
     if not test_probe(p):
       log.fatal("%s failed, aborting" % p)
-  if log.VERBOSE or step and not is_dry_run():
-    print(".. all tests succeeded, moving on\n")
+  if not is_dry_run() and not log.QUIET:
+    log.status_success()
+    print(f'{provider} installed and working correctly')
 
 def start_lab(settings: Box, provider: str, step: int = 2, cli_command: str = "test", exec_command: typing.Optional[str] = None) -> None:
   if exec_command is None:
@@ -109,9 +113,8 @@ def start_lab(settings: Box, provider: str, step: int = 2, cli_command: str = "t
   if not run_command(exec_command):
     log.fatal(f"{exec_command} failed, aborting...",cli_command)
 
-def deploy_configs(step : int = 3, command: str = "test", fast: typing.Optional[bool] = False) -> None:
-  print_step(step,"deploying initial device configurations",spacing = True)
-  cmd = ["netlab","initial"]
+def deploy_configs(command: str = "test", fast: typing.Optional[bool] = False) -> None:
+  cmd = ["netlab","initial","--no-message"]
   if log.VERBOSE:
     cmd.append("-" + "v" * log.VERBOSE)
 
@@ -121,6 +124,9 @@ def deploy_configs(step : int = 3, command: str = "test", fast: typing.Optional[
   if not run_command(set_ansible_flags(cmd)):
     log.fatal("netlab initial failed, aborting...",command)
 
+  log.status_success()
+  print("Lab devices configured")
+
 def custom_configs(config : str, group: str, step : int = 4, command: str = "test") -> None:
   print_step(step,"deploying custom configuration template %s for group %s" % (config,group))
   cmd = ["netlab","config",config,"--limit",group]
@@ -128,8 +134,7 @@ def custom_configs(config : str, group: str, step : int = 4, command: str = "tes
   if not run_command(set_ansible_flags(cmd)):
     log.fatal("netlab config failed, aborting...",command)
 
-def stop_lab(settings: Box, provider: str, step: int = 4, command: str = "test", exec_command: typing.Optional[str] = None) -> None:
-  print_step(step,f"stopping the lab: {provider}",True)
+def stop_lab(settings: Box, provider: str, command: str = "test", exec_command: typing.Optional[str] = None) -> None:
   if exec_command is None:
     exec_command = settings.providers[provider].stop
   if not run_command(exec_command):

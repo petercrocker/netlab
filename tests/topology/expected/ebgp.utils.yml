@@ -1,0 +1,614 @@
+bgp:
+  advertise_loopback: true
+  community:
+    ebgp:
+    - standard
+    ibgp:
+    - standard
+    - extended
+  multihop:
+    sessions:
+    - _linkname: bgp.multihop[1]
+      bgp:
+        password: Funny
+      interfaces:
+      - _bgp_session: true
+        bgp:
+          local_as: 123
+          multihop: 255
+        ifindex: 20000
+        ifname: Tunnel0
+        ipv4: 10.0.0.2/32
+        node: r2
+      - _bgp_session: true
+        bgp:
+          local_as: 456
+          multihop: 255
+        ifindex: 20000
+        ifname: Tunnel0
+        ipv4: 10.0.0.3/32
+        node: r3
+  next_hop_self: true
+  password: Secret
+  timers:
+    hold: 10
+    keepalive: 3
+groups:
+  as65001:
+    members:
+    - r1
+    - rr
+  as65002:
+    members:
+    - r2
+  as65003:
+    members:
+    - r3
+input:
+- topology/input/ebgp.utils.yml
+- package:topology-defaults.yml
+links:
+- interfaces:
+  - ifindex: 1
+    ifname: Ethernet1
+    ipv4: 10.1.0.1/30
+    node: r1
+  - ifindex: 1
+    ifname: Ethernet1
+    ipv4: 10.1.0.2/30
+    node: r2
+  linkindex: 1
+  node_count: 2
+  prefix:
+    ipv4: 10.1.0.0/30
+  role: external
+  type: p2p
+- bgp:
+    password: SomethingElse
+  interfaces:
+  - ifindex: 2
+    ifname: Ethernet2
+    ipv4: 10.1.0.5/30
+    node: r1
+  - bgp:
+      allowas_in: 1
+    ifindex: 1
+    ifname: Ethernet1
+    ipv4: 10.1.0.6/30
+    node: r3
+  linkindex: 2
+  node_count: 2
+  prefix:
+    ipv4: 10.1.0.4/30
+  role: external
+  type: p2p
+- interfaces:
+  - ifindex: 3
+    ifname: Ethernet3
+    ipv4: 10.1.0.9/30
+    node: r1
+  - ifindex: 1
+    ifname: Ethernet1
+    ipv4: 10.1.0.10/30
+    node: rr
+  linkindex: 3
+  node_count: 2
+  prefix:
+    ipv4: 10.1.0.8/30
+  type: p2p
+- bgp:
+    password: InVrf
+  interfaces:
+  - bgp:
+      default_originate: true
+    ifindex: 4
+    ifname: Ethernet4
+    ipv4: 10.1.0.13/30
+    node: r1
+  - bgp:
+      allowas_in: 1
+    ifindex: 2
+    ifname: Ethernet2
+    ipv4: 10.1.0.14/30
+    node: r2
+  linkindex: 4
+  node_count: 2
+  prefix:
+    ipv4: 10.1.0.12/30
+  role: external
+  type: p2p
+  vrf: red
+module:
+- bgp
+- vrf
+name: input
+nodes:
+  r1:
+    af:
+      ipv4: true
+      vpnv4: true
+    bgp:
+      _cprop_order:
+      - standard
+      - extended
+      - large
+      - link-bandwidth
+      advertise_loopback: true
+      as: 65001
+      community:
+        ebgp:
+        - standard
+        - large
+        ibgp:
+        - standard
+        - large
+        - extended
+        ibgp_localas:
+        - standard
+        - large
+        - extended
+      default_originate: true
+      ipv4: true
+      neighbors:
+      - activate:
+          ipv4: true
+        as: 65001
+        ipv4: 10.0.0.4
+        name: rr
+        password: Secret
+        rr: true
+        type: ibgp
+      - activate:
+          ipv4: true
+        as: 65002
+        default_originate: true
+        ifindex: 1
+        ipv4: 10.1.0.2
+        name: r2
+        password: Secret
+        timers:
+          hold: 10
+          keepalive: 3
+        type: ebgp
+      - activate:
+          ipv4: true
+        as: 65003
+        default_originate: true
+        ifindex: 2
+        ipv4: 10.1.0.6
+        name: r3
+        password: SomethingElse
+        timers:
+          hold: 10
+          keepalive: 3
+        type: ebgp
+      next_hop_self: true
+      password: Secret
+      router_id: 10.0.0.1
+      session:
+        apply:
+          ebgp: null
+          ibgp:
+          - password
+      timers:
+        hold: 10
+        keepalive: 3
+    box: arista/veos
+    config:
+    - bgp.session
+    device: eos
+    id: 1
+    interfaces:
+    - ifindex: 1
+      ifname: Ethernet1
+      ipv4: 10.1.0.1/30
+      linkindex: 1
+      name: r1 -> r2
+      neighbors:
+      - ifname: Ethernet1
+        ipv4: 10.1.0.2/30
+        node: r2
+      role: external
+      type: p2p
+    - bgp:
+        password: SomethingElse
+      ifindex: 2
+      ifname: Ethernet2
+      ipv4: 10.1.0.5/30
+      linkindex: 2
+      name: r1 -> r3
+      neighbors:
+      - bgp:
+          allowas_in: 1
+          password: SomethingElse
+        ifname: Ethernet1
+        ipv4: 10.1.0.6/30
+        node: r3
+      role: external
+      type: p2p
+    - ifindex: 3
+      ifname: Ethernet3
+      ipv4: 10.1.0.9/30
+      linkindex: 3
+      name: r1 -> rr
+      neighbors:
+      - ifname: Ethernet1
+        ipv4: 10.1.0.10/30
+        node: rr
+      type: p2p
+    - bgp:
+        default_originate: true
+        password: InVrf
+      ifindex: 4
+      ifname: Ethernet4
+      ipv4: 10.1.0.13/30
+      linkindex: 4
+      name: r1 -> r2
+      neighbors:
+      - bgp:
+          allowas_in: 1
+          password: InVrf
+        ifname: Ethernet2
+        ipv4: 10.1.0.14/30
+        node: r2
+        vrf: red
+      role: external
+      type: p2p
+      vrf: red
+    loopback:
+      ifindex: 0
+      ifname: Loopback0
+      ipv4: 10.0.0.1/32
+      neighbors: []
+      type: loopback
+    mgmt:
+      ifname: Management1
+      ipv4: 192.168.121.101
+      mac: 08:4f:a9:00:00:01
+    module:
+    - bgp
+    - vrf
+    name: r1
+    vrf:
+      as: 65000
+    vrfs:
+      red:
+        af:
+          ipv4: true
+        bgp:
+          neighbors:
+          - as: 65002
+            default_originate: true
+            ifindex: 4
+            ipv4: 10.1.0.14
+            name: r2
+            password: InVrf
+            timers:
+              hold: 10
+              keepalive: 3
+            type: ebgp
+        export:
+        - '65000:1'
+        id: 1
+        import:
+        - '65000:1'
+        rd: '65000:1'
+        vrfidx: 100
+  r2:
+    af:
+      ipv4: true
+      vpnv4: true
+    bgp:
+      _cprop_order:
+      - standard
+      - extended
+      - large
+      - link-bandwidth
+      advertise_loopback: true
+      as: 65002
+      community:
+        ebgp:
+        - standard
+        - large
+        ibgp:
+        - standard
+        - large
+        - extended
+        ibgp_localas:
+        - standard
+        - large
+        - extended
+      ipv4: true
+      neighbors:
+      - activate:
+          ipv4: true
+        as: 65001
+        ifindex: 1
+        ipv4: 10.1.0.1
+        name: r1
+        password: Secret
+        timers:
+          hold: 10
+          keepalive: 3
+        type: ebgp
+      - activate:
+          ipv4: true
+        as: 456
+        ifindex: 20000
+        ipv4: 10.0.0.3
+        local_as: 123
+        multihop: 255
+        name: r3
+        password: Funny
+        timers:
+          hold: 10
+          keepalive: 3
+        type: ebgp
+      next_hop_self: true
+      password: Secret
+      router_id: 10.0.0.2
+      timers:
+        hold: 10
+        keepalive: 3
+    box: arista/veos
+    config:
+    - bgp.session
+    - ebgp.multihop
+    device: eos
+    id: 2
+    interfaces:
+    - ifindex: 1
+      ifname: Ethernet1
+      ipv4: 10.1.0.2/30
+      linkindex: 1
+      name: r2 -> r1
+      neighbors:
+      - ifname: Ethernet1
+        ipv4: 10.1.0.1/30
+        node: r1
+      role: external
+      type: p2p
+    - bgp:
+        allowas_in: 1
+        password: InVrf
+      ifindex: 2
+      ifname: Ethernet2
+      ipv4: 10.1.0.14/30
+      linkindex: 4
+      name: r2 -> r1
+      neighbors:
+      - bgp:
+          default_originate: true
+          password: InVrf
+        ifname: Ethernet4
+        ipv4: 10.1.0.13/30
+        node: r1
+        vrf: red
+      role: external
+      type: p2p
+      vrf: red
+    loopback:
+      ifindex: 0
+      ifname: Loopback0
+      ipv4: 10.0.0.2/32
+      neighbors: []
+      type: loopback
+    mgmt:
+      ifname: Management1
+      ipv4: 192.168.121.102
+      mac: 08:4f:a9:00:00:02
+    module:
+    - bgp
+    - vrf
+    name: r2
+    vrf:
+      as: 65000
+    vrfs:
+      red:
+        af:
+          ipv4: true
+        bgp:
+          neighbors:
+          - allowas_in: 1
+            as: 65001
+            ifindex: 2
+            ipv4: 10.1.0.13
+            name: r1
+            password: InVrf
+            timers:
+              hold: 10
+              keepalive: 3
+            type: ebgp
+        export:
+        - '65000:1'
+        id: 1
+        import:
+        - '65000:1'
+        rd: '65000:1'
+        vrfidx: 100
+  r3:
+    af:
+      ipv4: true
+    bgp:
+      _cprop_order:
+      - standard
+      - extended
+      - large
+      - link-bandwidth
+      advertise_loopback: true
+      as: 65003
+      community:
+        ebgp:
+        - standard
+        - large
+        ibgp:
+        - standard
+        - large
+        - extended
+        ibgp_localas:
+        - standard
+        - large
+        - extended
+      ipv4: true
+      neighbors:
+      - activate:
+          ipv4: true
+        allowas_in: 1
+        as: 65001
+        ifindex: 1
+        ipv4: 10.1.0.5
+        name: r1
+        password: SomethingElse
+        timers:
+          hold: 10
+          keepalive: 3
+        type: ebgp
+      - activate:
+          ipv4: true
+        as: 123
+        ifindex: 20000
+        ipv4: 10.0.0.2
+        local_as: 456
+        multihop: 255
+        name: r2
+        password: Funny
+        timers:
+          hold: 10
+          keepalive: 3
+        type: ebgp
+      next_hop_self: true
+      password: Secret
+      router_id: 10.0.0.3
+      timers:
+        hold: 10
+        keepalive: 3
+    box: arista/veos
+    config:
+    - bgp.session
+    - ebgp.multihop
+    device: eos
+    id: 3
+    interfaces:
+    - bgp:
+        allowas_in: 1
+        password: SomethingElse
+      ifindex: 1
+      ifname: Ethernet1
+      ipv4: 10.1.0.6/30
+      linkindex: 2
+      name: r3 -> r1
+      neighbors:
+      - bgp:
+          password: SomethingElse
+        ifname: Ethernet2
+        ipv4: 10.1.0.5/30
+        node: r1
+      role: external
+      type: p2p
+    loopback:
+      ifindex: 0
+      ifname: Loopback0
+      ipv4: 10.0.0.3/32
+      neighbors: []
+      type: loopback
+    mgmt:
+      ifname: Management1
+      ipv4: 192.168.121.103
+      mac: 08:4f:a9:00:00:03
+    module:
+    - bgp
+    name: r3
+    vrf:
+      as: 65000
+  rr:
+    af:
+      ipv4: true
+    bgp:
+      _cprop_order:
+      - standard
+      - extended
+      - large
+      - link-bandwidth
+      advertise_loopback: true
+      as: 65001
+      community:
+        ebgp:
+        - standard
+        - large
+        ibgp:
+        - standard
+        - large
+        - extended
+        ibgp_localas:
+        - standard
+        - large
+        - extended
+      ipv4: true
+      neighbors:
+      - activate:
+          ipv4: true
+        as: 65001
+        ipv4: 10.0.0.1
+        name: r1
+        password: Secret
+        timers:
+          hold: 10
+          keepalive: 3
+        type: ibgp
+      next_hop_self: true
+      password: Secret
+      router_id: 10.0.0.4
+      rr: true
+      rr_cluster_id: 10.0.0.4
+      session:
+        apply:
+          ibgp:
+          - '*'
+      timers:
+        hold: 10
+        keepalive: 3
+    box: arista/veos
+    config:
+    - bgp.session
+    device: eos
+    id: 4
+    interfaces:
+    - ifindex: 1
+      ifname: Ethernet1
+      ipv4: 10.1.0.10/30
+      linkindex: 3
+      name: rr -> r1
+      neighbors:
+      - ifname: Ethernet3
+        ipv4: 10.1.0.9/30
+        node: r1
+      type: p2p
+    loopback:
+      ifindex: 0
+      ifname: Loopback0
+      ipv4: 10.0.0.4/32
+      neighbors: []
+      type: loopback
+    mgmt:
+      ifname: Management1
+      ipv4: 192.168.121.104
+      mac: 08:4f:a9:00:00:04
+    module:
+    - bgp
+    name: rr
+    vrf:
+      as: 65000
+plugin:
+- bgp.session
+- ebgp.multihop
+provider: libvirt
+vrf:
+  as: 65000
+vrfs:
+  red:
+    export:
+    - '65000:1'
+    id: 1
+    import:
+    - '65000:1'
+    rd: '65000:1'

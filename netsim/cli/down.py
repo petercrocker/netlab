@@ -13,9 +13,9 @@ import sys
 from box import Box
 
 from . import external_commands, set_dry_run, is_dry_run
-from . import lab_status_change,get_lab_id,fs_cleanup,load_snapshot
-from .. import read_topology,common,providers
-from ..utils import status,strings
+from . import lab_status_change,fs_cleanup,load_snapshot
+from .. import providers
+from ..utils import status,strings,log
 from .up import provider_probes
 #
 # CLI parser for 'netlab down' command
@@ -91,8 +91,7 @@ def tool_cleanup(topology: Box, verbose: bool = False) -> None:
 def stop_provider_lab(
       topology: Box,
       pname: str,
-      sname: typing.Optional[str] = None,
-      step: int = 2) -> None:
+      sname: typing.Optional[str] = None) -> None:
   p_name = sname or pname
   p_topology = providers.select_topology(topology,p_name)
   p_module   = providers._Provider.load(p_name,topology.defaults.providers[p_name])
@@ -102,14 +101,14 @@ def stop_provider_lab(
     exec_command = topology.defaults.providers[pname][sname].stop
 
   p_module.call('pre_stop_lab',p_topology)
-  external_commands.stop_lab(topology.defaults,p_name,step,"netlab down",exec_command)
+  external_commands.stop_lab(topology.defaults,p_name,"netlab down",exec_command)
   p_module.call('post_stop_lab',p_topology)
 
 '''
 lab_dir_mismatch -- check if the lab instance is running in the current directory
 '''
 def lab_dir_mismatch(topology: Box) -> bool:
-  lab_id = get_lab_id(topology)
+  lab_id = status.get_lab_id(topology)
   lab_status = status.read_status(topology)       # Find current running instance(s)
   if not lab_id in lab_status:                    # This could be a lab instance from pre-status days
     return False                                  # ... in which case we can shut it down
@@ -124,19 +123,9 @@ You could proceed if you want to clean up the netlab artifacts from this
 directory, but you might impact the running lab instance.
 ''')
   if not strings.confirm('Do you want to proceed?'):
-    common.fatal('aborting lab shutdown request')
+    log.fatal('aborting lab shutdown request')
 
   return True
-
-'''
-Remove the lab instance/directory from the status file
-'''
-def remove_lab_status(topology: Box) -> None:
-  lab_id = get_lab_id(topology)
-
-  status.change_status(
-    topology,
-    callback = lambda s,t: s.pop(lab_id,None))
 
 """
 Stop external tools
@@ -153,10 +142,9 @@ def stop_external_tools(args: argparse.Namespace, topology: Box) -> None:
 
   lab_status_change(topology,f'external tools stopped')
 
-def stop_all(topology: Box, args: argparse.Namespace, stop_step: int) -> int:
+def stop_all(topology: Box, args: argparse.Namespace) -> None:
   if 'tools' in topology:
-    external_commands.print_step(stop_step,"Stopping external tools",spacing=True)
-    stop_step = stop_step + 1
+    log.section_header('Stopping','external tools','yellow')
     stop_external_tools(args,topology)
 
   p_provider = topology.provider
@@ -167,8 +155,8 @@ def stop_all(topology: Box, args: argparse.Namespace, stop_step: int) -> int:
   for s_provider in topology[p_provider].providers:
     lab_status_change(topology,f'stopping {s_provider} provider')
     try:
-      stop_provider_lab(topology,p_provider,s_provider,step=stop_step)
-      stop_step = stop_step + 1
+      log.section_header('Stopping',f'{s_provider} nodes','yellow')
+      stop_provider_lab(topology,p_provider,s_provider)
     except:
       if not args.force:
         sys.exit(1)
@@ -176,13 +164,11 @@ def stop_all(topology: Box, args: argparse.Namespace, stop_step: int) -> int:
 
   try:
     lab_status_change(topology,f'stopping {p_provider} provider')
-    stop_provider_lab(topology,p_provider,step=stop_step)
-    stop_step = stop_step + 1
+    log.section_header('Stopping',f'{p_provider} nodes','yellow')
+    stop_provider_lab(topology,p_provider)
   except:
     if not args.force:
       sys.exit(1)
-
-  return stop_step
 
 def run(cli_args: typing.List[str]) -> None:
   args = down_parse(cli_args)
@@ -196,27 +182,25 @@ def run(cli_args: typing.List[str]) -> None:
   probes_OK = True
   lab_status_change(topology,f'lab shutdown requested{" in conflicting directory" if mismatch else ""}')
   try:
-    provider_probes(topology,1)
+    provider_probes(topology)
   except:
     probes_OK = False
     if not args.force:
       return
 
-  stop_step = 2
   if probes_OK:
-    stop_step = stop_all(topology,args,stop_step)
+    stop_all(topology,args)
 
   if args.cleanup:
     if 'tools' in topology:
-      external_commands.print_step(stop_step,"Cleanup tool configurations",spacing=True)
-      stop_step = stop_step + 1
+      log.section_header('Cleanup',f'tool configuration','yellow')
       tool_cleanup(topology,True)
 
-    external_commands.print_step(stop_step,"Cleanup configuration files",spacing=True)
+    log.section_header('Cleanup',f'configuration files','yellow')
     down_cleanup(topology,True)
 
   if not mismatch:
-    remove_lab_status(topology)
+    status.remove_lab_status(topology)
 
   if not is_dry_run():
     status.unlock_directory()

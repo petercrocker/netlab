@@ -40,7 +40,8 @@ links:
   gateway:
     ipv4: 172.16.0.1/24
   interfaces:
-  - ifindex: 1
+  - _vlan_mode: irb
+    ifindex: 1
     ifname: Ethernet1
     ipv4: 172.16.0.1/24
     node: s1
@@ -60,7 +61,8 @@ links:
   gateway:
     ipv4: 172.16.1.1/24
   interfaces:
-  - ifindex: 2
+  - _vlan_mode: irb
+    ifindex: 2
     ifname: Ethernet2
     ipv4: 172.16.1.1/24
     node: s1
@@ -80,7 +82,8 @@ links:
   gateway:
     ipv4: 172.16.0.2/24
   interfaces:
-  - ifindex: 1
+  - _vlan_mode: irb
+    ifindex: 1
     ifname: Ethernet1
     ipv4: 172.16.0.2/24
     node: s2
@@ -100,7 +103,8 @@ links:
   gateway:
     ipv4: 172.16.1.3/24
   interfaces:
-  - ifindex: 1
+  - _vlan_mode: irb
+    ifindex: 1
     ifname: Ethernet1
     ipv4: 172.16.1.3/24
     node: s3
@@ -256,13 +260,24 @@ nodes:
     af:
       ipv4: true
     bgp:
+      _cprop_order:
+      - standard
+      - extended
+      - large
+      - link-bandwidth
       advertise_loopback: true
       as: 65000
       community:
         ebgp:
         - standard
+        - large
         ibgp:
         - standard
+        - large
+        - extended
+        ibgp_localas:
+        - standard
+        - large
         - extended
       ipv4: true
       neighbors:
@@ -353,7 +368,11 @@ nodes:
       vlan:
         mode: irb
     loopback:
+      ifindex: 0
+      ifname: Loopback0
       ipv4: 10.0.0.1/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: Management1
       ipv4: 192.168.121.101
@@ -410,17 +429,29 @@ nodes:
       - red
       - blue
       vtep: 10.0.0.1
+      vtep_interface: Loopback0
   s2:
     af:
       ipv4: true
     bgp:
+      _cprop_order:
+      - standard
+      - extended
+      - large
+      - link-bandwidth
       advertise_loopback: true
       as: 65000
       community:
         ebgp:
         - standard
+        - large
         ibgp:
         - standard
+        - large
+        - extended
+        ibgp_localas:
+        - standard
+        - large
         - extended
       ipv4: true
       neighbors:
@@ -480,7 +511,11 @@ nodes:
       vlan:
         mode: irb
     loopback:
+      ifindex: 0
+      ifname: Loopback0
       ipv4: 10.0.0.2/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: Management1
       ipv4: 192.168.121.102
@@ -511,19 +546,6 @@ nodes:
           rd: 10.0.0.2:1000
         id: 1000
         mode: irb
-        neighbors:
-        - ifname: eth1
-          ipv4: 172.16.0.4/24
-          node: h1
-        - ifname: Vlan1000
-          ipv4: 172.16.0.1/24
-          node: s1
-        - ifname: eth1
-          ipv4: 172.16.0.6/24
-          node: h3
-        - ifname: Vlan1000
-          ipv4: 172.16.0.2/24
-          node: s2
         prefix:
           allocation: id_based
           ipv4: 172.16.0.0/24
@@ -534,17 +556,29 @@ nodes:
       vlans:
       - red
       vtep: 10.0.0.2
+      vtep_interface: Loopback0
   s3:
     af:
       ipv4: true
     bgp:
+      _cprop_order:
+      - standard
+      - extended
+      - large
+      - link-bandwidth
       advertise_loopback: true
       as: 65000
       community:
         ebgp:
         - standard
+        - large
         ibgp:
         - standard
+        - large
+        - extended
+        ibgp_localas:
+        - standard
+        - large
         - extended
       ipv4: true
       neighbors:
@@ -604,7 +638,11 @@ nodes:
       vlan:
         mode: irb
     loopback:
+      ifindex: 0
+      ifname: Loopback0
       ipv4: 10.0.0.3/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: Management1
       ipv4: 192.168.121.103
@@ -635,19 +673,6 @@ nodes:
           rd: 10.0.0.3:1001
         id: 1001
         mode: irb
-        neighbors:
-        - ifname: eth1
-          ipv4: 172.16.1.5/24
-          node: h2
-        - ifname: Vlan1001
-          ipv4: 172.16.1.1/24
-          node: s1
-        - ifname: eth1
-          ipv4: 172.16.1.7/24
-          node: h4
-        - ifname: Vlan1001
-          ipv4: 172.16.1.3/24
-          node: s3
         prefix:
           allocation: id_based
           ipv4: 172.16.1.0/24
@@ -658,6 +683,7 @@ nodes:
       vlans:
       - blue
       vtep: 10.0.0.3
+      vtep_interface: Loopback0
 ospf:
   area: 0.0.0.0
 provider: libvirt

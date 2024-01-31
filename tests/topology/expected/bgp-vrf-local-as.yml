@@ -70,7 +70,8 @@ links:
       blue: {}
       red: {}
 - interfaces:
-  - bgp:
+  - _vlan_mode: route
+    bgp:
       local_as: 65001
     ifindex: 3
     ifname: Ethernet3
@@ -80,7 +81,8 @@ links:
       access: vrf-leak
       mode: route
     vrf: red
-  - bgp:
+  - _vlan_mode: route
+    bgp:
       local_as: 65002
     ifindex: 4
     ifname: Ethernet4
@@ -108,14 +110,26 @@ nodes:
       ipv4: true
       vpnv4: true
     bgp:
+      _cprop_order:
+      - standard
+      - extended
+      - large
+      - link-bandwidth
       advertise_loopback: true
       as: 65100
       community:
         ebgp:
         - standard
+        - large
         ibgp:
         - standard
+        - large
         - extended
+        ibgp_localas:
+        - standard
+        - large
+        - extended
+      ipv4: true
       neighbors: []
       next_hop_self: true
       router_id: 10.0.0.1
@@ -174,7 +188,11 @@ nodes:
         routed_link: true
       vrf: red
     loopback:
+      ifindex: 0
+      ifname: Loopback0
       ipv4: 10.0.0.1/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: Management1
       ipv4: 192.168.121.101
@@ -245,14 +263,26 @@ nodes:
       ipv4: true
       vpnv4: true
     bgp:
+      _cprop_order:
+      - standard
+      - extended
+      - large
+      - link-bandwidth
       advertise_loopback: true
       as: 65000
       community:
         ebgp:
         - standard
+        - large
         ibgp:
         - standard
+        - large
         - extended
+        ibgp_localas:
+        - standard
+        - large
+        - extended
+      ipv4: true
       neighbors: []
       next_hop_self: true
       router_id: 10.0.0.2
@@ -280,8 +310,7 @@ nodes:
       role: external
       subif_index: 2
       type: p2p
-    - _vlan_mode: route
-      bgp:
+    - bgp:
         local_as: 65001
       bridge_group: 1
       ifindex: 3
@@ -300,8 +329,7 @@ nodes:
       vlan:
         mode: route
       vrf: red
-    - _vlan_mode: route
-      bgp:
+    - bgp:
         local_as: 65002
       bridge_group: 1
       ifindex: 4
@@ -401,7 +429,11 @@ nodes:
         routed_link: true
       vrf: red
     loopback:
+      ifindex: 0
+      ifname: Loopback0
       ipv4: 10.0.0.2/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: Management1
       ipv4: 192.168.121.102
@@ -503,14 +535,26 @@ nodes:
       ipv4: true
       vpnv4: true
     bgp:
+      _cprop_order:
+      - standard
+      - extended
+      - large
+      - link-bandwidth
       advertise_loopback: true
       as: 65101
       community:
         ebgp:
         - standard
+        - large
         ibgp:
         - standard
+        - large
         - extended
+        ibgp_localas:
+        - standard
+        - large
+        - extended
+      ipv4: true
       neighbors: []
       next_hop_self: true
       router_id: 10.0.0.3
@@ -569,7 +613,11 @@ nodes:
         routed_link: true
       vrf: red
     loopback:
+      ifindex: 0
+      ifname: Loopback0
       ipv4: 10.0.0.3/32
+      neighbors: []
+      type: loopback
     mgmt:
       ifname: Management1
       ipv4: 192.168.121.103

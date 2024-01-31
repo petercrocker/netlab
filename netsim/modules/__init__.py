@@ -9,9 +9,10 @@ import typing
 from box import Box
 
 # Related modules
-from .. import common,data
+from .. import data
+from ..utils import log,sort as _sort
 from ..data.validate import must_be_list
-from ..callback import Callback
+from ..utils.callback import Callback
 from ..augment import devices
 
 # List of attributes we don't want propagated from defaults to global/node
@@ -54,7 +55,7 @@ pre_default: execute before any validation checks to set up any data structures 
 """
 def pre_default(topology: Box) -> None:
   adjust_modules(topology)
-  common.exit_on_error()
+  log.exit_on_error()
 
   module_transform("pre_default",topology)
   node_transform("pre_default",topology)
@@ -71,12 +72,12 @@ pre_transform: executed just before the main data model transformation is starte
 """
 def pre_transform(topology: Box) -> None:
   module_validate(topology)
-  common.exit_on_error()
+  log.exit_on_error()
 
   module_transform("pre_transform",topology)
   node_transform("pre_transform",topology)
   link_transform("pre_transform",topology)
-  common.exit_on_error()
+  log.exit_on_error()
 
 """
 pre/post_node_transform: executed just before/after the node data model transformation is started
@@ -113,7 +114,7 @@ post_transform:
 """
 def post_transform(topology: Box) -> None:
   check_supported_node_devices(topology)       # A bit late, but we can do this check only after node data has been adjusted
-  common.exit_on_error()
+  log.exit_on_error()
   copy_node_data_into_interfaces(topology)     # Copy node attributes that match interface attributes into interfaces
   module_transform("post_transform",topology)
   node_transform("post_transform",topology)
@@ -134,11 +135,21 @@ def augment_node_module(topology: Box) -> None:
         path=f'nodes.{name}',
         create_empty=False,
         valid_values=mod_list)
-      continue
+    else:
+      # Copy global modules (if they exist) into non-host nodes
+      #
+      # non-host nodes are nodes that do not have 'role' set to 'host' or have 'daemon' set to True
+      #
+      daemon   = devices.get_device_attribute(n,'daemon',topology.defaults)
+      is_host  = devices.get_device_attribute(n,'role',topology.defaults) == 'host' or n.get('role') == 'host'
+      if g_module and (not is_host or daemon):
+        n.module = g_module
 
-    # Copy global modules (if they exist) into non-host devices
-    if g_module and n.get('role') != 'host' and devices.get_device_attribute(n,'role',topology.defaults) != 'host':
-      n.module = g_module
+    # Remove modules that are not used on the current daemon from the _daemon_config dictionary
+    if '_daemon_config' in n:
+      for m in list(n._daemon_config.keys()):
+        if m in mod_list and not m in n.module:                 # If an entry in _daemon_config is a known module
+          n._daemon_config.pop(m,None)                          # that is not active on the node, remove it
 
 # Check whether the modules defined on individual nodes are valid module names
 # and supported by the node device type
@@ -147,17 +158,17 @@ def check_supported_node_devices(topology: Box) -> None:
   for name,n in topology.nodes.items():
     for m in n.get("module",[]):                                # Iterate across all modules used by a node
       if not m in topology.defaults:                            # Do we know about the module?
-        common.error(
+        log.error(
           f"Unknown module {m} used by node {name}",
-          common.IncorrectValue,
+          log.IncorrectValue,
           'modules')
         continue
       mod_def = topology.defaults[m]                            # Get module defaults
       if mod_def and "supported_on" in mod_def :                # Are they sane and do they include supported device list?
         if not n.device in topology.defaults[m].supported_on:   # ... and is the device on the list?
-          common.error(
+          log.error(
             f"Device type {n.device} used by node {name} is not supported by module {m}",
-            common.IncorrectValue,
+            log.IncorrectValue,
             'modules')
           continue
 
@@ -251,14 +262,14 @@ def merge_global_module_params(topology: Box) -> None:
 
   for m in topology.module:                                     # Iterate over all configured modules
     if not m in topology.defaults:                              # Does this module have defaults?
-      common.error(
+      log.error(
         f"Unknown module {m} (we found no system defaults for it)",
-        common.IncorrectValue,
+        log.IncorrectValue,
         'module')
       continue                                                  # Nope. Weird, but doesn't matter right now.
     mod_def = topology.defaults[m]
     if not isinstance(mod_def,dict):                               # Are module defaults a dict?
-      common.fatal("Defaults for module %s should be a dict" % m)  # Nope? Too bad, crash right now, we can't live like that...
+      log.fatal("Defaults for module %s should be a dict" % m)  # Nope? Too bad, crash right now, we can't live like that...
 
     default_copy = data.get_box(mod_def)                        # Got module defaults. Now copy them (we're gonna clobber them)
     no_propagate = list(no_propagate_list)                      # Always remove these default attributes (and make a fresh copy of the list)
@@ -274,57 +285,6 @@ def merge_global_module_params(topology: Box) -> None:
   reorder_node_modules(topology,'transform_after')
 
 '''
-add_module_extra_parameters: add extra module keywords (ex: 'vrfs' for 'vrf' module) to the list of attributes
-'''
-
-##### REMOVE AFTER ATTRIBUTE MIGRATION #####
-def extend_global_attributes(attr: typing.Union[list,dict], extra: str) -> None:
-  if isinstance(attr,dict):
-    attr[extra] = None
-  elif isinstance(attr,list):
-    attr.append(extra)
-
-def add_module_extra_parameters(topology: Box) -> None:
-  if not 'module' in topology:
-    return
-
-  for m in topology.module:                                     # Iterate through the global list of modules
-    if 'extra' in topology.defaults[m].attributes:              # Does the module have 'extra' parameters?
-      for k in topology.defaults[m].attributes.extra.keys():    # ... oh, it does, iterate through its keys (attribute levels)
-        for attr in topology.defaults[m].attributes.extra[k]:   # Take every attribute from the list of extra attributes
-          if not attr in topology.defaults.attributes[k]:       # ... and if it's not already in the global list of attributes
-            extend_global_attributes(topology.defaults.attributes[k],attr)
-###            topology.defaults.attributes[k].append(attr)        # ... append it to the global list
-
-'''
-adjust_module_support: copy device 'supports' attribute into module 'supported_on' list
-'''
-
-def adjust_module_support(topology: Box) -> None:
-  for dname,ddata in topology.defaults.devices.items():         # Iterate through all devices
-    if not 'supports' in ddata:                                 # Old-style definition without 'supports' attribute?
-      continue
-    if ddata.supports == '*':                                   # Wildcard 'supports everything'?
-      for mname,mdata in topology.defaults.items():             # ... iterate through all default settings
-        if not 'supported_on' in mdata:                         # ... a module must have supported_on attribute
-          continue
-        if not dname in mdata.supported_on:                     # ... add device to the list of supported devices
-          mdata.supported_on.append(dname)
-      continue                                                  # ... and move on to the next device
-
-    # If we're here, we have a list of modules that the device supports
-    if not isinstance(ddata.supports,list):                     # ... but it's not a list?
-      continue                                                  # ... weird, but we can't do anything about it
-
-    for mname in ddata.supports:                                # Now iterate over the list of supported modules
-      if not mname in topology.defaults:                        # ... not a valid default attribute?
-        continue
-      if not 'supported_on' in topology.defaults[mname]:        # ... not a module?
-        continue
-      if not dname in topology.defaults[mname].supported_on:    # ... add device to the list of supported devices
-        topology.defaults[mname].supported_on.append(dname)
-
-'''
 adjust_modules: somewhat intricate multi-step config module adjustments
 
 * Set node default modules based on global modules
@@ -333,48 +293,21 @@ adjust_modules: somewhat intricate multi-step config module adjustments
 * Merge global module parametres into nodes
 '''
 def adjust_modules(topology: Box) -> None:
-  adjust_module_support(topology)
   augment_node_module(topology)
   adjust_global_modules(topology)
   if not 'module' in topology:
     return
     
-  common.exit_on_error()
+  log.exit_on_error()
   module_transform("init",topology)
   merge_node_module_params(topology)
   merge_global_module_params(topology)
-  add_module_extra_parameters(topology)
 
 """
 Validate module parameters and dependencies
 """
 def module_validate(topology: Box) -> None:
   check_module_dependencies(topology)
-
-"""
-Prepare module attribute dictionary
-
-* If the module attributes are a list, then global/node/link/interface attributes are the same
-
-Otherwise:
-
-* Add propagatable link attributes to interface attributes
-* Copy global attributes to node attributes if the node attributes are not specified
-"""
-
-def parse_module_attributes(a: typing.Union[typing.Dict, Box]) -> Box:
-  if isinstance(a,dict):
-    attr = data.get_box(a)
-    if not isinstance(attr.interface,str):
-      attr.interface = list(set(attr.link) - set(attr.link_no_propagate) | set(attr.interface))
-    attr.node = attr.get("node",attr["global"])
-  else:
-    attr = data.get_box({
-      "global": a,
-      "node": a,
-      "link": a,
-      "interface": a})
-  return attr
 
 """
 check_module_dependencies:
@@ -391,9 +324,9 @@ def check_module_dependencies(topology:  Box) -> None:
       mod_requires = topology.defaults[m].get('requires',[])
       for rqm in mod_requires:                      # Loop over prerequisite modules
         if not rqm in topology.module:              # Now we can be explicit - we know topology.modules exists
-          common.error(
+          log.error(
             f"Module {m} requires module {rqm} which is not enabled in your topology",
-            common.MissingValue,
+            log.MissingValue,
             'modules')
 
       for n in topology.nodes.values():                   # Now iterate over nodes and check device-specific requirements
@@ -408,9 +341,9 @@ def check_module_dependencies(topology:  Box) -> None:
           node_requires = mod_requires                    # ... otherwise use global module requirements
         for rqm in node_requires:                         # Iterate over module requirements for this node (global + device-specific)
           if not rqm in n.get('module'):                  # ... is required module listed in the node?
-            common.error(
+            log.error(
               f"Module {m} on device {n.device} (node {n.name}) requires {rqm} module",
-              common.IncorrectValue,
+              log.IncorrectValue,
               'modules')
 
 """
@@ -430,23 +363,8 @@ def reorder_node_modules(topology: Box, secondary_sort: str = "config_after") ->
       n.module = sort_module_list(n.module,topology.defaults, secondary_sort)
 
 def sort_module_list(mods: list, mod_params: Box, secondary_sort: str = "config_after") -> list:
-  if (len(mods) < 2):
-    return mods
-
-  output: typing.List[str] = []
-  while len(mods):
-    skipped: typing.List[str] = []
-    for m in mods:
-      if m in mod_params:
-        requires = mod_params[m].get('requires',[]) + mod_params[m].get(secondary_sort,[])
-        if [ r for r in requires if r in mods ]:
-          skipped = skipped + [ m ]
-        else:
-          output = output + [ m ]
-
-    mods = skipped
-
-  return output
+  mods = [ m for m in mods if m in mod_params ]
+  return _sort.dependency(mods,lambda m: mod_params[m].get('requires',[]) + mod_params[m].get(secondary_sort,[]))
 
 """
 Copy node data into interface data:
@@ -527,13 +445,13 @@ mod_load: typing.Dict = {}
 def module_transform(method: str, topology: Box) -> None:
   global mod_load
 
-  if common.debug_active('modules'):
+  if log.debug_active('modules'):
     print(f'Processing module_{method} hooks')
 
   for m in topology.get('module',[]):
     if not mod_load.get(m):
       mod_load[m] = _Module.load(m,topology.get(m))
-    if common.debug_active('modules'):
+    if log.debug_active('modules'):
       if hasattr(mod_load[m],f"module_{method}"):
         print(f'Calling module {m} module_{method}')
     mod_load[m].call("module_"+method,topology)
@@ -541,14 +459,14 @@ def module_transform(method: str, topology: Box) -> None:
 def node_transform(method: str , topology: Box) -> None:
   global mod_load
 
-  if common.debug_active('modules'):
+  if log.debug_active('modules'):
     print(f'Processing node_{method} hooks')
 
   for name,n in topology.nodes.items():
     for m in n.get('module',[]):
       if not mod_load.get(m):  # pragma: no cover (module should have been loaded already)
         mod_load[m] = _Module.load(m,topology.get(m))
-      if common.debug_active('modules'):
+      if log.debug_active('modules'):
         if hasattr(mod_load[m],f"node_{method}"):
           print(f'Calling module {m} node_{method} on node {name}')
       mod_load[m].call("node_"+method,n,topology)
@@ -556,7 +474,7 @@ def node_transform(method: str , topology: Box) -> None:
 def link_transform(method: str, topology: Box) -> None:
   global mod_load
 
-  if common.debug_active('modules'):
+  if log.debug_active('modules'):
     print(f'Processing link_{method} hooks')
 
   for l in topology.get("links",[]):
@@ -566,7 +484,7 @@ def link_transform(method: str, topology: Box) -> None:
     for m in mod_list.keys():
       if not mod_load.get(m):  # pragma: no cover (module should have been loaded already)
         mod_load[m] = _Module.load(m,topology.get(m))
-      if common.debug_active('modules'):
+      if log.debug_active('modules'):
         if hasattr(mod_load[m],f"link_{method}"):
           print(f'Calling module {m} link_{method} on link {l.get("name","unnamed")}')
       mod_load[m].call("link_"+method,l,topology)
